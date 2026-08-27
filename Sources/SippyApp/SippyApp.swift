@@ -29,7 +29,9 @@ struct SippyApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("Sippy", id: "main") {
+        // A single Window (not a WindowGroup): openWindow(id:) then fronts
+        // the existing window instead of spawning another one.
+        Window("Sippy", id: "main") {
             MainView()
                 .environment(appDelegate.engine)
                 .environment(appDelegate.systemContacts)
@@ -39,7 +41,7 @@ struct SippyApp: App {
                         appDelegate.engine.handle(request)
                     }
                 }
-                .frame(minWidth: 320, minHeight: 480)
+                .frame(minWidth: 260, minHeight: 440)
         }
         .windowResizability(.contentSize)
         .commands {

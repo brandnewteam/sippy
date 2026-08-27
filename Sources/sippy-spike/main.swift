@@ -72,7 +72,8 @@ func setUpAccount(_ core: Core) throws {
 
     let params = try core.createAccountParams()
     try params.setIdentityaddress(newValue: Factory.Instance.createAddress(addr: "sip:\(user)@\(domain)"))
-    try params.setServeraddr(newValue: "sip:\(domain);transport=\(transport)")
+    try params.setServeraddress(
+        newValue: Factory.Instance.createAddress(addr: "sip:\(domain);transport=\(transport)"))
     params.registerEnabled = true
 
     let account = try core.createAccount(params: params)

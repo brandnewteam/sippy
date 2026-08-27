@@ -33,6 +33,8 @@ struct RegistrationBanner: View {
         HStack(spacing: 8) {
             Circle().fill(color).frame(width: 9, height: 9)
             Text(label).font(.callout)
+                .lineLimit(1)
+                .truncationMode(.middle)
             Spacer()
             if case .unconfigured = engine.registration {
                 Button("Set Up…") { openSettings() }

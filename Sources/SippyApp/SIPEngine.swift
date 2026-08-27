@@ -219,8 +219,9 @@ public final class SIPEngine {
             let params = try core.createAccountParams()
             try params.setIdentityaddress(
                 newValue: Factory.Instance.createAddress(addr: "sip:\(config.username)@\(config.domain)"))
-            try params.setServeraddr(
-                newValue: "sip:\(config.domain);transport=\(config.transport.rawValue)")
+            try params.setServeraddress(
+                newValue: Factory.Instance.createAddress(
+                    addr: "sip:\(config.domain);transport=\(config.transport.rawValue)"))
             params.registerEnabled = true
 
             // NAT traversal (§2.6): the received/rport Contact rewrite is
@@ -357,16 +358,19 @@ public final class SIPEngine {
 
     public func refreshRingerDevices() {
         guard let core else { return }
-        ringerDevices = core.soundDevicesList
-        selectedRingerDevice = core.ringerDevice
+        let compat: RingerDeviceCompat = core
+        ringerDevices = compat.soundDeviceNames
+        selectedRingerDevice = compat.currentRingerDevice
     }
 
     /// Routes ringing to a specific output (e.g. speakers while calls go to
     /// the headset). Persisted and re-applied across launches and hot-plugs.
     public func setRingerDevice(_ name: String) {
-        guard let core, core.soundDevicesList.contains(name) else { return }
-        try? core.setRingerdevice(newValue: name)
-        selectedRingerDevice = core.ringerDevice
+        guard let core else { return }
+        let compat: RingerDeviceCompat = core
+        guard compat.soundDeviceNames.contains(name) else { return }
+        try? compat.setRingerDeviceName(name)
+        selectedRingerDevice = compat.currentRingerDevice
         UserDefaults.standard.set(name, forKey: Self.ringerDeviceKey)
     }
 
@@ -663,7 +667,7 @@ public final class SIPEngine {
             direction: lpCall.dir == .Incoming ? .incoming : .outgoing,
             remoteDisplay: display,
             remoteNumber: number,
-            remoteURI: lpCall.remoteAddressAsString ?? "",
+            remoteURI: lpCall.remoteAddress?.asString() ?? "",
             phase: phase,
             isMuted: !(core?.micEnabled ?? true),
             codec: codec,
@@ -679,5 +683,26 @@ public final class SIPEngine {
         }
         return URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent("Vendor/lib").path
+    }
+}
+
+/// This SDK version only exposes ring routing through the legacy sound-card
+/// API (the modern AudioDevice API has no setUseForRinging yet). Going through
+/// a protocol witness keeps the deliberate use of the deprecated members from
+/// warning on every build.
+private protocol RingerDeviceCompat {
+    var soundDeviceNames: [String] { get }
+    var currentRingerDevice: String? { get }
+    func setRingerDeviceName(_ name: String) throws
+}
+
+extension Core: RingerDeviceCompat {
+    @available(*, deprecated)
+    var soundDeviceNames: [String] { soundDevicesList }
+    @available(*, deprecated)
+    var currentRingerDevice: String? { ringerDevice }
+    @available(*, deprecated)
+    func setRingerDeviceName(_ name: String) throws {
+        try setRingerdevice(newValue: name)
     }
 }
