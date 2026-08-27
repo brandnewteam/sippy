@@ -14,6 +14,7 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 - **Ringtones** — six bundled synthesized ringtones (public domain, regenerable via `Tools/make_ringtones.py`), custom import, and ring-device routing (ring on speakers, talk on headset).
 - **At home on macOS** — menu bar extra with quick answer/hang-up and favorites speed-dial, start at login, Dock/menu-bar presence choice, re-registration on network change and wake.
 - **NAT traversal** — received/rport IP rewrite toggle, optional STUN/ICE.
+- **VPN-aware registration** (opt-in) — register only while a route to the server exists. For PBXes reached over a VPN: no timeout noise while the tunnel is down, instant re-register when it comes up. Private server addresses need a specific (VPN-pushed or LAN) route; the catch-all default route doesn't count.
 
 ## Building
 

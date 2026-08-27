@@ -17,6 +17,7 @@ import Testing
         #expect(config.natRewrite == true)
         #expect(config.stunServer == nil)
         #expect(config.iceEnabled == false)
+        #expect(config.requireRoute == false)
     }
 
     @Test func roundTripsAllFields() throws {
@@ -26,6 +27,7 @@ import Testing
         config.natRewrite = false
         config.stunServer = "stun.example.com"
         config.iceEnabled = true
+        config.requireRoute = true
 
         let data = try JSONEncoder().encode(config)
         let decoded = try JSONDecoder().decode(AccountConfig.self, from: data)

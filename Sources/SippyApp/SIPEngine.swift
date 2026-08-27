@@ -18,6 +18,9 @@ public final class SIPEngine {
         case connecting
         case registered
         case failed(String)
+        /// Route gating is on and no route to the domain exists (VPN down):
+        /// registration is deliberately not being attempted.
+        case waitingForRoute
     }
 
     public enum CallPhase: Equatable {
@@ -122,6 +125,10 @@ public final class SIPEngine {
     private var iterateTimer: Timer?
     private var pathMonitor: NWPathMonitor?
     private var wakeObserver: NSObjectProtocol?
+    private var routeProbeGeneration = 0
+    private var routeProbeTask: Task<Void, Never>?
+    /// True while route gating has told the stack to stand down.
+    private var routeGateClosed = false
     private var activeCall: Call?
     private var ringStartedAt: Date?
     private var declinedLocally = false
@@ -241,6 +248,13 @@ public final class SIPEngine {
             try core.addAccount(account: sipAccount)
             core.defaultAccount = sipAccount
             registration = .connecting
+            if config.requireRoute {
+                scheduleRouteProbe()
+            } else if routeGateClosed {
+                // Gating switched off: hand reachability back to the OS path.
+                routeGateClosed = false
+                core.networkReachable = true
+            }
         } catch {
             registration = .failed("Invalid account settings: \(error)")
         }
@@ -402,6 +416,20 @@ public final class SIPEngine {
 
     private func networkChanged(reachable: Bool) {
         guard let core else { return }
+        if account.requireRoute, account.isConfigured {
+            // Route gating decides reachability itself: probe the domain
+            // (debounced — VPN connects flap the path several times).
+            if reachable {
+                scheduleRouteProbe()
+            } else {
+                // Invalidate any in-flight probe so a stale "routable"
+                // result can't reopen the gate.
+                routeProbeGeneration += 1
+                routeProbeTask?.cancel()
+                routeGate(open: false)
+            }
+            return
+        }
         // Telling the stack about reachability flips make it drop and rebuild
         // its transports; a refresh on the way up re-registers promptly
         // instead of waiting out the register timer.
@@ -410,6 +438,63 @@ public final class SIPEngine {
             registration = .connecting
             core.refreshRegisters()
         }
+    }
+
+    // MARK: - Route gating
+
+    /// Debounced probe: path updates arrive in bursts while a VPN is coming
+    /// up, so wait for them to settle before evaluating.
+    private func scheduleRouteProbe() {
+        routeProbeGeneration += 1
+        routeProbeTask?.cancel()
+        routeProbeTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard !Task.isCancelled else { return }
+            self?.probeRoute()
+        }
+    }
+
+    /// Asks the kernel's routing table (RTM_GET, see `RouteCheck`) whether
+    /// the domain is deliverable right now. No SIP traffic, no packets at
+    /// all. Runs detached: name resolution can block.
+    private func probeRoute() {
+        guard account.requireRoute, account.isConfigured else { return }
+        let host = Self.probeTarget(for: account.domain).host
+        let generation = routeProbeGeneration
+        Task.detached(priority: .utility) {
+            let routable = RouteCheck.routeAvailable(toHost: host)
+            await MainActor.run { [weak self] in
+                guard let self, self.routeProbeGeneration == generation else { return }
+                self.routeGate(open: routable)
+            }
+        }
+    }
+
+    private func routeGate(open: Bool) {
+        guard let core else { return }
+        if open {
+            let wasClosed = routeGateClosed
+            routeGateClosed = false
+            core.networkReachable = true
+            if wasClosed || registration != .registered {
+                registration = .connecting
+                core.refreshRegisters()
+            }
+        } else {
+            routeGateClosed = true
+            core.networkReachable = false
+            registration = .waitingForRoute
+        }
+    }
+
+    /// The registration destination: the domain's host, and its explicit
+    /// port if one is given ("pbx.example.com:5080"), else 5060.
+    static func probeTarget(for domain: String) -> (host: String, port: UInt16) {
+        let parts = domain.split(separator: ":", maxSplits: 1)
+        if parts.count == 2, let port = UInt16(parts[1]) {
+            return (String(parts[0]), port)
+        }
+        return (domain, 5060)
     }
 
     // MARK: - Codecs
@@ -549,6 +634,12 @@ public final class SIPEngine {
     }
 
     private func registrationChanged(_ state: RegistrationState, message: String) {
+        // While the route gate is closed, late failures/teardowns from the
+        // stack shouldn't repaint the deliberate "waiting" state as an error.
+        if routeGateClosed, state != .Ok {
+            registration = .waitingForRoute
+            return
+        }
         switch state {
         case .Ok:
             registration = .registered

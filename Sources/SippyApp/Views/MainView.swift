@@ -50,6 +50,7 @@ struct RegistrationBanner: View {
         case .connecting: .yellow
         case .failed: .red
         case .unconfigured: .gray
+        case .waitingForRoute: .orange
         }
     }
 
@@ -59,6 +60,7 @@ struct RegistrationBanner: View {
         case .connecting: "Connecting…"
         case .failed(let message): "Registration failed: \(message)"
         case .unconfigured: "No account configured"
+        case .waitingForRoute: "Server unreachable — waiting for a route (VPN down?)"
         }
     }
 }

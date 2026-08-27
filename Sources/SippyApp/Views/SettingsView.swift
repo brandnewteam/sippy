@@ -15,6 +15,7 @@ struct SettingsView: View {
     @State private var natRewrite = true
     @State private var stunServer = ""
     @State private var iceEnabled = false
+    @State private var requireRoute = false
     @State private var loaded = false
 
     var body: some View {
@@ -60,6 +61,12 @@ struct SettingsView: View {
                 Toggle("Use ICE", isOn: $iceEnabled)
                     .disabled(stunServer.trimmingCharacters(in: .whitespaces).isEmpty)
                 Text("Leave as-is when the PBX rewrites addresses server-side (Kalliope can).")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Connection") {
+                Toggle("Register only while a route to the server exists", isOn: $requireRoute)
+                Text("For servers reached over a VPN: don't attempt to connect while the VPN is down, and reconnect as soon as it comes up.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -153,6 +160,7 @@ struct SettingsView: View {
         natRewrite = account.natRewrite
         stunServer = account.stunServer ?? ""
         iceEnabled = account.iceEnabled
+        requireRoute = account.requireRoute
         if account.isConfigured {
             password = KeychainStore.password(for: account.keychainKey) ?? ""
         }
@@ -170,7 +178,8 @@ struct SettingsView: View {
             dialPlan: plan,
             natRewrite: natRewrite,
             stunServer: stun.isEmpty ? nil : stun,
-            iceEnabled: iceEnabled && !stun.isEmpty)
+            iceEnabled: iceEnabled && !stun.isEmpty,
+            requireRoute: requireRoute)
         engine.applyAccount(config, password: password)
     }
 }

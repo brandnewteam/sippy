@@ -18,6 +18,7 @@ struct MenuBarIcon: View {
         case .connecting: return "phone.badge.clock"
         case .failed: return "phone.down.fill"
         case .unconfigured: return "phone"
+        case .waitingForRoute: return "phone.badge.waveform"
         }
     }
 }
@@ -73,6 +74,7 @@ struct MenuBarView: View {
         case .connecting: "Registering…"
         case .failed(let message): "Registration failed: \(message)"
         case .unconfigured: "No account configured"
+        case .waitingForRoute: "Waiting for a route to the server (VPN down?)"
         }
     }
 
