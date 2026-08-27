@@ -32,6 +32,13 @@ struct SippyApp: App {
             }
         }
 
+        // Debug window; listed in the Window menu.
+        Window("SIP Log", id: "sip-log") {
+            SIPLogView()
+                .environment(appDelegate.engine)
+        }
+        .keyboardShortcut("l", modifiers: [.command, .shift])
+
         Settings {
             SettingsView()
                 .environment(appDelegate.engine)

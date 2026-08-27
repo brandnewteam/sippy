@@ -18,6 +18,8 @@ struct SettingsView: View {
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
             audioTab
                 .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
+            codecsTab
+                .tabItem { Label("Codecs", systemImage: "waveform") }
         }
         .frame(width: 440, height: 500)
         .onAppear(perform: loadOnce)
@@ -70,6 +72,54 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .onAppear { engine.refreshAudioDevices() }
+    }
+
+    /// Order = priority; changes apply immediately (they only take effect on
+    /// the next call anyway).
+    private var codecsTab: some View {
+        VStack(spacing: 0) {
+            List {
+                ForEach(engine.codecPreferences) { pref in
+                    HStack(spacing: 10) {
+                        Toggle("", isOn: Binding(
+                            get: { pref.enabled },
+                            set: { setEnabled($0, for: pref.id) }
+                        ))
+                        .labelsHidden()
+                        .toggleStyle(.checkbox)
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(pref.displayName)
+                            Text(pref.detail).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "line.3.horizontal")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .opacity(pref.enabled ? 1 : 0.5)
+                }
+                .onMove { from, to in
+                    var codecs = engine.codecPreferences
+                    codecs.move(fromOffsets: from, toOffset: to)
+                    engine.setCodecPreferences(codecs)
+                }
+            }
+            Divider()
+            HStack {
+                Text("Drag to set priority. First enabled codec is offered first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("Reset to Defaults") { engine.resetCodecPreferencesToDefaults() }
+            }
+            .padding(10)
+        }
+    }
+
+    private func setEnabled(_ enabled: Bool, for id: String) {
+        var codecs = engine.codecPreferences
+        guard let index = codecs.firstIndex(where: { $0.id == id }) else { return }
+        codecs[index].enabled = enabled
+        engine.setCodecPreferences(codecs)
     }
 
     private func loadOnce() {

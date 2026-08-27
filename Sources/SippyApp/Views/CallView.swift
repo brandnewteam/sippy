@@ -4,6 +4,7 @@ import SippyCore
 struct CallView: View {
     @Environment(SIPEngine.self) private var engine
     @State private var showDTMFPad = false
+    @State private var showStats = false
 
     var body: some View {
         guard let call = engine.call else { return AnyView(EmptyView()) }
@@ -21,6 +22,10 @@ struct CallView: View {
                 statusLine(call)
 
                 Spacer()
+
+                if showStats, call.phase != .ringingIncoming {
+                    CallStatsPanel()
+                }
 
                 if showDTMFPad {
                     DTMFPad { engine.sendDTMF($0) }
@@ -72,7 +77,7 @@ struct CallView: View {
 
     @ViewBuilder
     private func inCallControls(_ call: SIPEngine.CallInfo) -> some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 16) {
             RoundActionButton(
                 symbol: call.isMuted ? "mic.slash.fill" : "mic.fill",
                 tint: call.isMuted ? .orange : .secondary,
@@ -90,6 +95,12 @@ struct CallView: View {
                 tint: showDTMFPad ? .accentColor : .secondary,
                 label: "Keypad"
             ) { showDTMFPad.toggle() }
+
+            RoundActionButton(
+                symbol: "chart.xyaxis.line",
+                tint: showStats ? .accentColor : .secondary,
+                label: "Stats"
+            ) { showStats.toggle() }
 
             RoundActionButton(symbol: "phone.down.fill", tint: .red, label: "End") {
                 engine.hangUp()

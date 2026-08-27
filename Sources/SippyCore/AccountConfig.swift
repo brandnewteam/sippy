@@ -11,17 +11,33 @@ public struct AccountConfig: Codable, Equatable, Sendable {
     public var username: String
     public var transport: Transport
     public var dialPlan: DialPlan
+    /// Ordered codec priority list; empty means "use the defaults" (it is
+    /// reconciled against the SIP stack's codec list at startup).
+    public var codecPreferences: [CodecPreference]
 
     public init(
         domain: String = "",
         username: String = "",
         transport: Transport = .udp,
-        dialPlan: DialPlan = DialPlan()
+        dialPlan: DialPlan = DialPlan(),
+        codecPreferences: [CodecPreference] = []
     ) {
         self.domain = domain
         self.username = username
         self.transport = transport
         self.dialPlan = dialPlan
+        self.codecPreferences = codecPreferences
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        domain = try container.decode(String.self, forKey: .domain)
+        username = try container.decode(String.self, forKey: .username)
+        transport = try container.decode(Transport.self, forKey: .transport)
+        dialPlan = try container.decode(DialPlan.self, forKey: .dialPlan)
+        // Absent in configs saved before M4.
+        codecPreferences =
+            try container.decodeIfPresent([CodecPreference].self, forKey: .codecPreferences) ?? []
     }
 
     public var isConfigured: Bool { !domain.isEmpty && !username.isEmpty }

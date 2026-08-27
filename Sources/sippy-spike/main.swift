@@ -99,6 +99,21 @@ LoggingService.Instance.logLevel = env("SIPPY_DEBUG") != nil ? .Debug : .Warning
 
 let core = try makeCore()
 
+// SIPPY_CODECS=G729 (comma-separated mime types) restricts the offered audio
+// codecs — used to force-test negotiation of a specific codec.
+if let filter = env("SIPPY_CODECS") {
+    let wanted = filter.split(separator: ",").map {
+        $0.trimmingCharacters(in: .whitespaces).lowercased()
+    }
+    for pt in core.audioPayloadTypes {
+        _ = pt.enable(enabled: wanted.contains(pt.mimeType.lowercased()))
+    }
+    let enabled = core.audioPayloadTypes.filter { $0.enabled() }
+        .map { "\($0.mimeType)/\($0.clockRate)" }
+        .joined(separator: ", ")
+    print("codec filter active: \(enabled)")
+}
+
 switch command {
 case "codecs":
     listCodecs(core)

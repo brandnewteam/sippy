@@ -60,6 +60,23 @@ public final class SIPEngine {
         public let isInput: Bool
     }
 
+    /// One ~1s sample of the audio stream's health, taken whenever the SIP
+    /// stack refreshes its call statistics. Jitter/loss come in two flavors:
+    /// what we measure on the stream we receive (download) and what the far
+    /// end reports about the stream we send (upload, via RTCP).
+    public struct CallStatsSnapshot: Equatable, Sendable {
+        public var time: Date
+        public var uploadKbps: Float
+        public var downloadKbps: Float
+        public var downloadJitterMs: Float
+        public var uploadJitterMs: Float
+        public var rttMs: Float
+        public var downloadLossPct: Float
+        public var uploadLossPct: Float
+        public var iceState: String
+        public var encryption: String
+    }
+
     public private(set) var registration: RegistrationStatus = .unconfigured
     public private(set) var call: CallInfo?
     public private(set) var lastCallError: String?
@@ -67,6 +84,21 @@ public final class SIPEngine {
     public private(set) var outputDevices: [AudioDeviceInfo] = []
     public private(set) var selectedInputID: String?
     public private(set) var selectedOutputID: String?
+
+    /// Effective codec priority list (stored preferences reconciled with what
+    /// the stack offers). Order = priority.
+    public private(set) var codecPreferences: [CodecPreference] = []
+    /// Rolling per-second stats for the current call (cleared when a new call
+    /// starts). Last element is the freshest.
+    public private(set) var statsHistory: [CallStatsSnapshot] = []
+    public var currentStats: CallStatsSnapshot? { statsHistory.last }
+    /// Captured SIP messages, newest last. Only fills while `sipTraceEnabled`.
+    public private(set) var sipTrace: [SIPTraceEntry] = []
+    public private(set) var sipTraceEnabled = UserDefaults.standard.bool(forKey: SIPEngine.sipTraceKey)
+
+    private static let sipTraceKey = "sippy.sipTraceEnabled"
+    private static let statsHistoryLimit = 600
+    private static let sipTraceLimit = 500
 
     public var account: AccountConfig
 
@@ -78,6 +110,7 @@ public final class SIPEngine {
 
     private var core: Core?
     private var delegate: CoreDelegateStub?
+    private var logDelegate: LoggingServiceDelegateStub?
     private var iterateTimer: Timer?
     private var activeCall: Call?
     private var ringStartedAt: Date?
@@ -92,7 +125,8 @@ public final class SIPEngine {
     public func start() {
         guard core == nil else { return }
         do {
-            LoggingService.Instance.logLevel = ProcessInfo.processInfo.environment["SIPPY_DEBUG"] != nil ? .Debug : .Warning
+            applyLogLevel()
+            installLogCapture()
             Factory.Instance.mspluginsDir = Self.pluginsDirectory()
             let core = try Factory.Instance.createCore(configPath: nil, factoryConfigPath: nil, systemContext: nil)
             core.videoActivationPolicy?.automaticallyAccept = false
@@ -108,6 +142,9 @@ public final class SIPEngine {
             iterateTimer = timer
 
             refreshAudioDevices()
+            codecPreferences = CodecDefaults.merge(
+                stored: account.codecPreferences, available: snapshotAvailableCodecs())
+            applyCodecPreferencesToCore()
             if account.isConfigured {
                 applyAccount(account, password: KeychainStore.password(for: account.keychainKey) ?? "")
             }
@@ -120,6 +157,10 @@ public final class SIPEngine {
 
     public func applyAccount(_ config: AccountConfig, password: String) {
         guard let core else { return }
+        // Codec preferences are managed via setCodecPreferences, not the
+        // account form — carry the current list over.
+        var config = config
+        config.codecPreferences = codecPreferences
         account = config
         AccountConfigStore.save(config)
         KeychainStore.setPassword(password, for: config.keychainKey)
@@ -245,12 +286,121 @@ public final class SIPEngine {
         selectedOutputID = id
     }
 
+    // MARK: - Codecs
+
+    /// Replaces the codec priority list: reorders and enables/disables the
+    /// stack's payload types to match, and persists the list with the account.
+    public func setCodecPreferences(_ preferences: [CodecPreference]) {
+        codecPreferences = preferences
+        applyCodecPreferencesToCore()
+        account.codecPreferences = preferences
+        AccountConfigStore.save(account)
+    }
+
+    public func resetCodecPreferencesToDefaults() {
+        setCodecPreferences(CodecDefaults.defaultList(available: snapshotAvailableCodecs()))
+    }
+
+    private func snapshotAvailableCodecs() -> [CodecPreference] {
+        guard let core else { return [] }
+        return core.audioPayloadTypes.map {
+            CodecPreference(
+                mime: $0.mimeType, clockRate: $0.clockRate,
+                channels: $0.channels, enabled: $0.enabled())
+        }
+    }
+
+    private func applyCodecPreferencesToCore() {
+        guard let core else { return }
+        let payloads = core.audioPayloadTypes
+        var byID: [String: PayloadType] = [:]
+        for payload in payloads {
+            let id = "\(payload.mimeType.lowercased())/\(payload.clockRate)/\(payload.channels)"
+            byID[id] = payload
+        }
+        var ordered: [PayloadType] = []
+        for pref in codecPreferences {
+            guard let payload = byID.removeValue(forKey: pref.id) else { continue }
+            _ = payload.enable(enabled: pref.enabled)
+            ordered.append(payload)
+        }
+        // Anything the preference list doesn't know: keep it, disabled.
+        for payload in byID.values {
+            _ = payload.enable(enabled: false)
+            ordered.append(payload)
+        }
+        core.audioPayloadTypes = ordered
+    }
+
+    // MARK: - SIP trace
+
+    public func setSIPTraceEnabled(_ enabled: Bool) {
+        sipTraceEnabled = enabled
+        UserDefaults.standard.set(enabled, forKey: Self.sipTraceKey)
+        applyLogLevel()
+    }
+
+    public func clearSIPTrace() {
+        sipTrace = []
+    }
+
+    /// Plain-text dump of the captured trace, for export / bug reports.
+    public func sipTraceExportText() -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        var out = "Sippy SIP trace — exported \(formatter.string(from: Date()))\n"
+        out += "Account: \(account.username)@\(account.domain) (\(account.transport.rawValue))\n\n"
+        for entry in sipTrace {
+            let arrow = entry.direction == .sent ? "→ sent" : entry.direction == .received ? "← received" : "· logged"
+            out += "===== \(formatter.string(from: entry.date)) \(arrow) =====\n"
+            out += entry.raw + "\n\n"
+        }
+        return out
+    }
+
+    /// SIP messages arrive through the stack's log stream (level Message).
+    /// The delegate stays installed permanently; `sipTraceEnabled` just
+    /// gates the log level and the capture.
+    private func installLogCapture() {
+        guard logDelegate == nil else { return }
+        let delegate = LoggingServiceDelegateStub(onLogMessageWritten: { [weak self] _, _, _, message in
+            // Cheap pre-filter before parsing: every SIP start-line contains
+            // "SIP/2.0". Log callbacks can fire off the main thread.
+            guard message.contains("SIP/2.0") else { return }
+            let date = Date()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.sipTraceEnabled,
+                          let entry = SIPTraceParser.parse(logMessage: message, date: date)
+                    else { return }
+                    self.sipTrace.append(entry)
+                    if self.sipTrace.count > Self.sipTraceLimit {
+                        self.sipTrace.removeFirst(self.sipTrace.count - Self.sipTraceLimit)
+                    }
+                }
+            }
+        })
+        LoggingService.Instance.addDelegate(delegate: delegate)
+        logDelegate = delegate
+    }
+
+    private func applyLogLevel() {
+        if ProcessInfo.processInfo.environment["SIPPY_DEBUG"] != nil {
+            LoggingService.Instance.logLevel = .Debug
+        } else {
+            LoggingService.Instance.logLevel = sipTraceEnabled ? .Message : .Warning
+        }
+    }
+
     // MARK: - Internals
 
     private func installDelegate(on core: Core) {
         let delegate = CoreDelegateStub(
             onCallStateChanged: { [weak self] _, lpCall, state, message in
                 MainActor.assumeIsolated { self?.callChanged(lpCall, state: state, message: message) }
+            },
+            onCallStatsUpdated: { [weak self] _, lpCall, stats in
+                MainActor.assumeIsolated { self?.statsUpdated(lpCall, stats: stats) }
             },
             onAudioDevicesListUpdated: { [weak self] _ in
                 MainActor.assumeIsolated { self?.refreshAudioDevices() }
@@ -275,6 +425,44 @@ public final class SIPEngine {
         }
     }
 
+    private func statsUpdated(_ lpCall: Call, stats: CallStats) {
+        guard lpCall === activeCall, stats.type == .Audio else { return }
+        let encryption: String
+        switch lpCall.currentParams?.mediaEncryption {
+        case .SRTP: encryption = "SRTP"
+        case .ZRTP: encryption = "ZRTP"
+        case .DTLS: encryption = "DTLS-SRTP"
+        default: encryption = "None"
+        }
+        let ice: String
+        switch stats.iceState {
+        case .NotActivated: ice = "Off"
+        case .InProgress: ice = "Negotiating"
+        case .HostConnection: ice = "Host"
+        case .ReflexiveConnection: ice = "Reflexive"
+        case .RelayConnection: ice = "Relay"
+        case .Failed: ice = "Failed"
+        }
+        statsHistory.append(CallStatsSnapshot(
+            time: Date(),
+            uploadKbps: stats.uploadBandwidth,
+            downloadKbps: stats.downloadBandwidth,
+            downloadJitterMs: stats.senderInterarrivalJitter * 1000,
+            uploadJitterMs: stats.receiverInterarrivalJitter * 1000,
+            rttMs: stats.roundTripDelay * 1000,
+            downloadLossPct: max(0, stats.localLossRate),
+            uploadLossPct: max(0, stats.receiverLossRate),
+            iceState: ice,
+            encryption: encryption))
+        if statsHistory.count > Self.statsHistoryLimit {
+            statsHistory.removeFirst(statsHistory.count - Self.statsHistoryLimit)
+        }
+        // The negotiated codec can change mid-call (re-INVITE); keep it fresh.
+        if let payload = lpCall.currentParams?.usedAudioPayloadType {
+            call?.codec = "\(payload.mimeType)/\(payload.clockRate)"
+        }
+    }
+
     private func callChanged(_ lpCall: Call, state: Call.State, message: String) {
         // Single-call policy for M1: a second incoming call is politely refused.
         if activeCall != nil, lpCall !== activeCall, state == .IncomingReceived {
@@ -287,10 +475,11 @@ public final class SIPEngine {
             activeCall = lpCall
             ringStartedAt = Date()
             declinedLocally = false
+            statsHistory = []
             call = makeInfo(for: lpCall, phase: .ringingIncoming)
         case .OutgoingInit, .OutgoingProgress, .OutgoingRinging, .OutgoingEarlyMedia:
             activeCall = lpCall
-            if call == nil { ringStartedAt = Date(); declinedLocally = false }
+            if call == nil { ringStartedAt = Date(); declinedLocally = false; statsHistory = [] }
             call = makeInfo(for: lpCall, phase: .ringingOutgoing)
         case .Connected:
             call = makeInfo(for: lpCall, phase: .active, startedAt: call?.startedAt ?? Date())
