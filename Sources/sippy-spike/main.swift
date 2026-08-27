@@ -12,8 +12,21 @@ import Foundation
 import linphonesw
 import SippyCore
 
+// KEY=VALUE pairs from ./.env (the committed .env.example documents the keys);
+// real environment variables win over the file.
+let dotEnv: [String: String] = {
+    guard let contents = try? String(contentsOfFile: ".env", encoding: .utf8) else { return [:] }
+    var values: [String: String] = [:]
+    for line in contents.split(separator: "\n") {
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.hasPrefix("#"), let eq = trimmed.firstIndex(of: "=") else { continue }
+        values[String(trimmed[..<eq])] = String(trimmed[trimmed.index(after: eq)...])
+    }
+    return values
+}()
+
 func env(_ name: String) -> String? {
-    ProcessInfo.processInfo.environment[name]
+    ProcessInfo.processInfo.environment[name] ?? dotEnv[name]
 }
 
 func requireEnv(_ name: String) -> String {
