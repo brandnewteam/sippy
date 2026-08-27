@@ -55,6 +55,9 @@ Default enabled priority: **Opus → G.722 → G.711 (PCMU/PCMA) → G.729**. Ra
 ### 2.5 Table-stakes (parity with Telephone)
 Multiple accounts, registration status, dialpad with DTMF, mute/hold/transfer, call history, audio device selection with hot-plug handling, macOS notifications with Answer/Decline actions, optional menu bar extra.
 
+### 2.6 NAT / IP rewrite (per-account setting)
+Like Telephone's "Update IP Address" / MicroSIP's "allow IP rewrite": rewrite Contact/Via using the public address learned from responses (`received`/`rport`), for PBXs that don't fix it server-side (Kalliope can, but not every PBX will). liblinphone already ships the machinery — its Sal NAT helper plus `NatPolicy` (STUN/TURN/ICE) — so this is mostly exposing a toggle + optional STUN server field in account settings. Scheduled with M5 hardening (network-change handling lives there anyway).
+
 ## 3. Architecture
 
 ```
@@ -91,7 +94,7 @@ Multiple accounts, registration status, dialpad with DTMF, mute/hold/transfer, c
 
 **M4 — Codecs & inspector.** Codec preference UI with the defaults above, live traffic panel, SIP/SDP debug log with codec-negotiation view, log export.
 
-**M5 — Ringtones & polish.** Bundled ringtones, custom import, per-account selection, ring-device routing; menu bar extra; then hardening: hot-plug audio, sleep/wake re-registration, network-change handling (Wi-Fi ↔ Ethernet ↔ VPN).
+**M5 — Ringtones & polish.** Bundled ringtones, custom import, per-account selection, ring-device routing; menu bar extra; NAT/IP-rewrite account setting (§2.6); then hardening: hot-plug audio, sleep/wake re-registration, network-change handling (Wi-Fi ↔ Ethernet ↔ VPN).
 
 **M6 — Release engineering.** Direct distribution first: Developer ID signing, notarization, Sparkle updates, GPLv3 repo hygiene (the GPL makes Mac App Store distribution awkward anyway). Test matrix against Asterisk and FreeSWITCH in Docker.
 
