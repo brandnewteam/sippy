@@ -19,7 +19,7 @@ struct SettingsView: View {
             audioTab
                 .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
         }
-        .frame(width: 420)
+        .frame(width: 440, height: 500)
         .onAppear(perform: loadOnce)
     }
 
