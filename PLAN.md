@@ -90,6 +90,8 @@ Like Telephone's "Update IP Address" / MicroSIP's "allow IP rewrite": rewrite Co
 
 **M2 — Contacts & history.** SwiftData store, system-contacts merge, search, favorites, call history with redial, caller-ID resolution.
 
+*M2 findings (2026-08-27):* delivered, with one substitution — the CLT toolchain ships no SwiftData macros (Xcode-only), so persistence is a JSON-file `AppStore` in Application Support instead. At this data size that's arguably the better tool; revisit only if relational needs appear. Caller-ID matching (`PhoneNumberMatcher`) uses normalized equality plus a ≥7-digit suffix rule so international/national formats match while short PBX extensions require exact equality.
+
 **M3 — Dial plan & OS integration.** Prefix/rules engine + settings UI, tel:/callto:/sip: URL handler, Services menu entry, paste-and-dial.
 
 **M4 — Codecs & inspector.** Codec preference UI with the defaults above, live traffic panel, SIP/SDP debug log with codec-negotiation view, log export.

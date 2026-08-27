@@ -27,13 +27,31 @@ public final class SIPEngine {
         case ending
     }
 
+    public enum CallDirection: Equatable { case incoming, outgoing }
+
     public struct CallInfo: Equatable {
+        public var direction: CallDirection
         public var remoteDisplay: String
+        public var remoteNumber: String
         public var remoteURI: String
         public var phase: CallPhase
         public var isMuted: Bool
         public var codec: String?
         public var startedAt: Date?
+    }
+
+    /// Summary handed to `onCallFinished` when a call is fully released —
+    /// the app layer turns these into history records.
+    public struct FinishedCall {
+        public var direction: CallDirection
+        public var remoteNumber: String
+        public var remoteDisplay: String
+        public var ringStartedAt: Date
+        public var connectedAt: Date?
+        public var endedAt: Date
+        public var wasDeclinedLocally: Bool
+        public var errorMessage: String?
+        public var codec: String?
     }
 
     public struct AudioDeviceInfo: Equatable, Identifiable {
@@ -52,10 +70,18 @@ public final class SIPEngine {
 
     public var account: AccountConfig
 
+    /// Resolves a number to a display name (Sippy contacts, then system
+    /// contacts). Set by the app layer.
+    public var displayNameResolver: ((String) -> String?)?
+    /// Invoked once per call after it is fully released.
+    public var onCallFinished: ((FinishedCall) -> Void)?
+
     private var core: Core?
     private var delegate: CoreDelegateStub?
     private var iterateTimer: Timer?
     private var activeCall: Call?
+    private var ringStartedAt: Date?
+    private var declinedLocally = false
 
     public init() {
         account = AccountConfigStore.load() ?? AccountConfig()
@@ -143,6 +169,7 @@ public final class SIPEngine {
     }
 
     public func decline() {
+        declinedLocally = true
         try? activeCall?.decline(reason: .Declined)
     }
 
@@ -239,9 +266,12 @@ public final class SIPEngine {
         switch state {
         case .IncomingReceived, .PushIncomingReceived:
             activeCall = lpCall
+            ringStartedAt = Date()
+            declinedLocally = false
             call = makeInfo(for: lpCall, phase: .ringingIncoming)
         case .OutgoingInit, .OutgoingProgress, .OutgoingRinging, .OutgoingEarlyMedia:
             activeCall = lpCall
+            if call == nil { ringStartedAt = Date(); declinedLocally = false }
             call = makeInfo(for: lpCall, phase: .ringingOutgoing)
         case .Connected:
             call = makeInfo(for: lpCall, phase: .active, startedAt: call?.startedAt ?? Date())
@@ -259,8 +289,21 @@ public final class SIPEngine {
             lastCallError = message
             call?.phase = .ending
         case .Released:
+            if let info = call {
+                onCallFinished?(FinishedCall(
+                    direction: info.direction,
+                    remoteNumber: info.remoteNumber,
+                    remoteDisplay: info.remoteDisplay,
+                    ringStartedAt: ringStartedAt ?? Date(),
+                    connectedAt: info.startedAt,
+                    endedAt: Date(),
+                    wasDeclinedLocally: declinedLocally,
+                    errorMessage: lastCallError,
+                    codec: info.codec))
+            }
             activeCall = nil
             call = nil
+            ringStartedAt = nil
         case .Idle, .IncomingEarlyMedia, .Referred:
             break
         }
@@ -268,13 +311,18 @@ public final class SIPEngine {
 
     private func makeInfo(for lpCall: Call, phase: CallPhase, startedAt: Date? = nil) -> CallInfo {
         let address = lpCall.remoteAddress
-        let display = address?.displayName ?? address?.username ?? "Unknown"
+        let number = address?.username ?? ""
+        let display = displayNameResolver?(number)
+            ?? address?.displayName
+            ?? (number.isEmpty ? "Unknown" : number)
         var codec: String?
         if let payload = lpCall.currentParams?.usedAudioPayloadType {
             codec = "\(payload.mimeType)/\(payload.clockRate)"
         }
         return CallInfo(
+            direction: lpCall.dir == .Incoming ? .incoming : .outgoing,
             remoteDisplay: display,
+            remoteNumber: number,
             remoteURI: lpCall.remoteAddressAsString ?? "",
             phase: phase,
             isMuted: !(core?.micEnabled ?? true),

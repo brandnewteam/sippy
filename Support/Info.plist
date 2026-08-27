@@ -28,6 +28,8 @@
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Sippy needs the microphone for phone calls.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Sippy can show your address book contacts and use them for caller ID.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>AGPLv3</string>
 </dict>

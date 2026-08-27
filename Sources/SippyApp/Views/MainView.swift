@@ -11,7 +11,15 @@ struct MainView: View {
             if engine.call != nil {
                 CallView()
             } else {
-                DialpadView()
+                TabView {
+                    DialpadView()
+                        .tabItem { Label("Dialpad", systemImage: "circle.grid.3x3.fill") }
+                    ContactsView()
+                        .tabItem { Label("Contacts", systemImage: "person.2.fill") }
+                    HistoryView()
+                        .tabItem { Label("History", systemImage: "clock.arrow.circlepath") }
+                }
+                .padding(.top, 4)
             }
         }
     }
