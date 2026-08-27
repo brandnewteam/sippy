@@ -10,7 +10,7 @@ public struct SIPTraceEntry: Identifiable, Equatable, Sendable {
     public let id: UUID
     public let date: Date
     public let direction: Direction
-    /// Request line or status line, e.g. "INVITE sip:0600@… SIP/2.0".
+    /// Request line or status line, e.g. "INVITE sip:600@… SIP/2.0".
     public let firstLine: String
     /// The complete SIP message, headers and body.
     public let raw: String

@@ -2,11 +2,11 @@ import Testing
 @testable import SippyCore
 
 @Suite struct SDPTests {
-    // Trimmed from a real Kalliope 200 OK.
+    // Shaped like the test PBX’s 200 OK (Tools/pbx-test).
     private let answer = """
         v=0
         o=- 1755 1755 IN IP4 127.0.0.1
-        s=Kalliope
+        s=Asterisk
         c=IN IP4 127.0.0.1
         t=0 0
         m=audio 10024 RTP/AVP 8 18 101
@@ -58,7 +58,7 @@ import Testing
 @Suite struct SIPTraceParserTests {
     private let sentLog = """
         channel [0x7fd]: message sent to [UDP://127.0.0.1:5060], size: [431] bytes
-        INVITE sip:0600@127.0.0.1 SIP/2.0
+        INVITE sip:600@127.0.0.1 SIP/2.0
         Via: SIP/2.0/UDP 127.0.0.1:5060
         Content-Type: application/sdp
 
@@ -72,7 +72,7 @@ import Testing
         #expect(entry.direction == .sent)
         #expect(entry.isRequest)
         #expect(entry.label == "INVITE")
-        #expect(entry.firstLine == "INVITE sip:0600@127.0.0.1 SIP/2.0")
+        #expect(entry.firstLine == "INVITE sip:600@127.0.0.1 SIP/2.0")
         #expect(entry.sdp?.codecs.first?.name == "G729/8000")
     }
 
