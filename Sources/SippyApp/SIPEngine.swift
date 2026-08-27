@@ -129,6 +129,11 @@ public final class SIPEngine {
     private var routeProbeTask: Task<Void, Never>?
     /// True while route gating has told the stack to stand down.
     private var routeGateClosed = false
+    private var routeTableMonitor: RouteTableMonitor?
+    private var dnsConfigMonitor: DNSConfigMonitor?
+    /// Safety net while the gate is closed: a missed route event must not
+    /// strand the account offline forever.
+    private var routeRetryTimer: Timer?
     private var activeCall: Call?
     private var ringStartedAt: Date?
     private var declinedLocally = false
@@ -253,6 +258,8 @@ public final class SIPEngine {
             } else if routeGateClosed {
                 // Gating switched off: hand reachability back to the OS path.
                 routeGateClosed = false
+                routeRetryTimer?.invalidate()
+                routeRetryTimer = nil
                 core.networkReachable = true
             }
         } catch {
@@ -408,10 +415,34 @@ public final class SIPEngine {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self, let core = self.core else { return }
+                // With route gating on, probe before registering — waking
+                // away from the VPN shouldn't produce a round of timeouts
+                // (Telephone gates its wake re-register the same way).
+                if self.account.requireRoute, self.account.isConfigured {
+                    self.scheduleRouteProbe()
+                    return
+                }
                 if self.account.isConfigured { self.registration = .connecting }
                 core.refreshRegisters()
             }
         }
+
+        // Route gating reactiveness: NWPathMonitor only reports interface
+        // changes, so also watch the routing table itself (a VPN pushing or
+        // withdrawing routes on an existing utun) and the DNS configuration
+        // (a domain only the VPN's resolvers know). Both just trigger the
+        // debounced probe, which decides.
+        let reprobe: @Sendable () -> Void = { [weak self] in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    guard let self, self.account.requireRoute, self.account.isConfigured
+                    else { return }
+                    self.scheduleRouteProbe()
+                }
+            }
+        }
+        routeTableMonitor = RouteTableMonitor(onChange: reprobe)
+        dnsConfigMonitor = DNSConfigMonitor(onChange: reprobe)
     }
 
     private func networkChanged(reachable: Bool) {
@@ -475,6 +506,8 @@ public final class SIPEngine {
         if open {
             let wasClosed = routeGateClosed
             routeGateClosed = false
+            routeRetryTimer?.invalidate()
+            routeRetryTimer = nil
             core.networkReachable = true
             if wasClosed || registration != .registered {
                 registration = .connecting
@@ -484,6 +517,13 @@ public final class SIPEngine {
             routeGateClosed = true
             core.networkReachable = false
             registration = .waitingForRoute
+            if routeRetryTimer == nil {
+                let timer = Timer(timeInterval: 90, repeats: true) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.probeRoute() }
+                }
+                RunLoop.main.add(timer, forMode: .common)
+                routeRetryTimer = timer
+            }
         }
     }
 
