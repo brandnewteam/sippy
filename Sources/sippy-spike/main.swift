@@ -114,6 +114,34 @@ case "register":
     try core.start()
     runLoop(core)
 
+case "receive":
+    // Registers and waits for an incoming call, logging every state change.
+    // SIPPY_AUTOANSWER=<seconds> answers after that delay; otherwise it just
+    // keeps ringing until the caller gives up.
+    try setUpAccount(core)
+    let autoAnswer = env("SIPPY_AUTOANSWER").flatMap(Double.init)
+    let delegate = CoreDelegateStub(
+        onCallStateChanged: { _, call, state, message in
+            print("call: \(state) — \(message)")
+            if state == .IncomingReceived, let autoAnswer {
+                DispatchQueue.main.asyncAfter(deadline: .now() + autoAnswer) {
+                    print("auto-answering…")
+                    try? call.accept()
+                }
+            }
+            if state == .StreamsRunning, let payload = call.currentParams?.usedAudioPayloadType {
+                print("negotiated codec: \(payload.mimeType)/\(payload.clockRate)")
+            }
+        },
+        onAccountRegistrationStateChanged: { _, _, state, message in
+            print("registration: \(state) — \(message)")
+            if state == .Ok { print("waiting for incoming calls…") }
+            if state == .Failed { exit(1) }
+        })
+    core.addDelegate(delegate: delegate)
+    try core.start()
+    runLoop(core)
+
 case "call":
     guard let target = arguments.dropFirst().first else {
         fputs("usage: sippy-spike call <number-or-sip-uri>\n", stderr)
