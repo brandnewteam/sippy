@@ -30,7 +30,12 @@ enum AppPresence: String, CaseIterable, Identifiable {
     /// Persists and applies the Dock half; the menu bar half is SwiftUI's
     /// `MenuBarExtra(isInserted:)` reading `showsMenuBarExtra`.
     func apply() {
-        UserDefaults.standard.set(rawValue, forKey: Self.defaultsKey)
+        // Only touch defaults on a real change: a same-value write still
+        // notifies @AppStorage and can re-trigger the scene update that
+        // called us.
+        if Self.current != self {
+            UserDefaults.standard.set(rawValue, forKey: Self.defaultsKey)
+        }
         let policy: NSApplication.ActivationPolicy = self == .menuBarOnly ? .accessory : .regular
         if NSApp.activationPolicy() != policy {
             NSApp.setActivationPolicy(policy)

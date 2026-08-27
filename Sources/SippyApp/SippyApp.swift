@@ -14,10 +14,15 @@ struct SippyApp: App {
         Binding(
             get: { AppPresence(rawValue: presenceRaw)?.showsMenuBarExtra ?? true },
             set: { inserted in
+                let current = AppPresence(rawValue: presenceRaw) ?? .dockAndMenuBar
                 let presence: AppPresence =
                     inserted
-                    ? (AppPresence(rawValue: presenceRaw) == .dockOnly ? .dockAndMenuBar : AppPresence.current)
+                    ? (current == .dockOnly ? .dockAndMenuBar : current)
                     : .dockOnly
+                // MenuBarExtra(isInserted:) writes this binding back on every
+                // scene update; an unconditional write re-invalidates the
+                // scene body and loops forever, pegging the main thread.
+                guard presence != current else { return }
                 presenceRaw = presence.rawValue
                 presence.apply()
             })
