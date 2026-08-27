@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import Network
 import Observation
 import SippyCore
 import linphonesw
@@ -96,7 +98,13 @@ public final class SIPEngine {
     public private(set) var sipTrace: [SIPTraceEntry] = []
     public private(set) var sipTraceEnabled = UserDefaults.standard.bool(forKey: SIPEngine.sipTraceKey)
 
+    /// Devices the ring can play on (legacy sound-card names — the modern
+    /// AudioDevice API in this SDK version has no ring routing yet).
+    public private(set) var ringerDevices: [String] = []
+    public private(set) var selectedRingerDevice: String?
+
     private static let sipTraceKey = "sippy.sipTraceEnabled"
+    private static let ringerDeviceKey = "sippy.ringerDevice"
     private static let statsHistoryLimit = 600
     private static let sipTraceLimit = 500
 
@@ -112,6 +120,8 @@ public final class SIPEngine {
     private var delegate: CoreDelegateStub?
     private var logDelegate: LoggingServiceDelegateStub?
     private var iterateTimer: Timer?
+    private var pathMonitor: NWPathMonitor?
+    private var wakeObserver: NSObjectProtocol?
     private var activeCall: Call?
     private var ringStartedAt: Date?
     private var declinedLocally = false
@@ -142,12 +152,17 @@ public final class SIPEngine {
             iterateTimer = timer
 
             refreshAudioDevices()
+            refreshRingerDevices()
+            if let stored = UserDefaults.standard.string(forKey: Self.ringerDeviceKey) {
+                setRingerDevice(stored)
+            }
             codecPreferences = CodecDefaults.merge(
                 stored: account.codecPreferences, available: snapshotAvailableCodecs())
             applyCodecPreferencesToCore()
             if account.isConfigured {
                 applyAccount(account, password: KeychainStore.password(for: account.keychainKey) ?? "")
             }
+            startHardeningMonitors()
         } catch {
             registration = .failed("Could not start SIP engine: \(error)")
         }
@@ -157,10 +172,11 @@ public final class SIPEngine {
 
     public func applyAccount(_ config: AccountConfig, password: String) {
         guard let core else { return }
-        // Codec preferences are managed via setCodecPreferences, not the
-        // account form — carry the current list over.
+        // Codec preferences and the ringtone are managed by their own
+        // settings UIs, not the account form — carry the current values over.
         var config = config
         config.codecPreferences = codecPreferences
+        config.ringtone = account.ringtone
         account = config
         AccountConfigStore.save(config)
         KeychainStore.setPassword(password, for: config.keychainKey)
@@ -183,6 +199,20 @@ public final class SIPEngine {
             try params.setServeraddr(
                 newValue: "sip:\(config.domain);transport=\(config.transport.rawValue)")
             params.registerEnabled = true
+
+            // NAT traversal (§2.6): the received/rport Contact rewrite is
+            // liblinphone's "NAT helper"; STUN/ICE ride a NatPolicy.
+            core.config?.setBool(section: "net", key: "enable_nat_helper", value: config.natRewrite)
+            let stun = config.stunServer?.trimmingCharacters(in: .whitespaces) ?? ""
+            if !stun.isEmpty || config.iceEnabled {
+                let nat = try core.createNatPolicy()
+                if !stun.isEmpty {
+                    nat.stunServer = stun
+                    nat.stunEnabled = true
+                }
+                nat.iceEnabled = config.iceEnabled
+                params.natPolicy = nat
+            }
             let sipAccount = try core.createAccount(params: params)
             try core.addAccount(account: sipAccount)
             core.defaultAccount = sipAccount
@@ -284,6 +314,75 @@ public final class SIPEngine {
         core.outputAudioDevice = device
         activeCall?.outputAudioDevice = device
         selectedOutputID = id
+    }
+
+    // MARK: - Ringtone & ringer device
+
+    /// Points the stack's ring player at a sound file; nil restores the SDK
+    /// default ring.
+    public func setRingtonePath(_ path: String?) {
+        core?.ring = path
+    }
+
+    /// User picked a ringtone: apply it and persist the choice (by filename,
+    /// so the library can move) with the account.
+    public func setRingtone(fileName: String?, path: String?) {
+        core?.ring = path
+        account.ringtone = fileName
+        AccountConfigStore.save(account)
+    }
+
+    public func refreshRingerDevices() {
+        guard let core else { return }
+        ringerDevices = core.soundDevicesList
+        selectedRingerDevice = core.ringerDevice
+    }
+
+    /// Routes ringing to a specific output (e.g. speakers while calls go to
+    /// the headset). Persisted and re-applied across launches and hot-plugs.
+    public func setRingerDevice(_ name: String) {
+        guard let core, core.soundDevicesList.contains(name) else { return }
+        try? core.setRingerdevice(newValue: name)
+        selectedRingerDevice = core.ringerDevice
+        UserDefaults.standard.set(name, forKey: Self.ringerDeviceKey)
+    }
+
+    // MARK: - Hardening
+
+    /// Re-registration triggers that don't come from SIP itself: network path
+    /// changes (Wi-Fi ↔ Ethernet ↔ VPN) and wake from sleep.
+    private func startHardeningMonitors() {
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            let reachable = path.status == .satisfied
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.networkChanged(reachable: reachable) }
+            }
+        }
+        monitor.start(queue: DispatchQueue(label: "sippy.pathmonitor"))
+        pathMonitor = monitor
+
+        wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, let core = self.core else { return }
+                if self.account.isConfigured { self.registration = .connecting }
+                core.refreshRegisters()
+            }
+        }
+    }
+
+    private func networkChanged(reachable: Bool) {
+        guard let core else { return }
+        // Telling the stack about reachability flips make it drop and rebuild
+        // its transports; a refresh on the way up re-registers promptly
+        // instead of waiting out the register timer.
+        core.networkReachable = reachable
+        if reachable, account.isConfigured {
+            registration = .connecting
+            core.refreshRegisters()
+        }
     }
 
     // MARK: - Codecs
@@ -403,7 +502,17 @@ public final class SIPEngine {
                 MainActor.assumeIsolated { self?.statsUpdated(lpCall, stats: stats) }
             },
             onAudioDevicesListUpdated: { [weak self] _ in
-                MainActor.assumeIsolated { self?.refreshAudioDevices() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.refreshAudioDevices()
+                    self.refreshRingerDevices()
+                    // Re-pin the preferred ringer if it just got plugged back in.
+                    if let preferred = UserDefaults.standard.string(forKey: Self.ringerDeviceKey),
+                       self.ringerDevices.contains(preferred),
+                       self.selectedRingerDevice != preferred {
+                        self.setRingerDevice(preferred)
+                    }
+                }
             },
             onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
                 MainActor.assumeIsolated { self?.registrationChanged(state, message: message) }

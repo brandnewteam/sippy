@@ -3,6 +3,7 @@ import SippyCore
 
 struct SettingsView: View {
     @Environment(SIPEngine.self) private var engine
+    @Environment(RingtoneLibrary.self) private var ringtones
 
     @State private var domain = ""
     @State private var username = ""
@@ -10,6 +11,9 @@ struct SettingsView: View {
     @State private var transport: AccountConfig.Transport = .udp
     @State private var outsidePrefix = ""
     @State private var internationalPrefix = ""
+    @State private var natRewrite = true
+    @State private var stunServer = ""
+    @State private var iceEnabled = false
     @State private var loaded = false
 
     var body: some View {
@@ -20,9 +24,12 @@ struct SettingsView: View {
                 .tabItem { Label("Audio", systemImage: "speaker.wave.2") }
             codecsTab
                 .tabItem { Label("Codecs", systemImage: "waveform") }
+            RingtoneSettingsTab()
+                .tabItem { Label("Ringtones", systemImage: "bell") }
         }
-        .frame(width: 440, height: 500)
+        .frame(width: 440, height: 520)
         .onAppear(perform: loadOnce)
+        .onDisappear { ringtones.stopPreview() }
     }
 
     private var accountTab: some View {
@@ -41,6 +48,15 @@ struct SettingsView: View {
                 TextField("Outside line prefix", text: $outsidePrefix, prompt: Text("e.g. 0 or 0*4"))
                 TextField("Replace leading + with", text: $internationalPrefix, prompt: Text("e.g. 00 (empty keeps +)"))
                 Text("The prefix applies to numbers from links and system contacts. The dialpad and Sippy contacts dial verbatim.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("NAT traversal") {
+                Toggle("Update IP address from server replies", isOn: $natRewrite)
+                TextField("STUN server", text: $stunServer, prompt: Text("stun.example.com (optional)"))
+                Toggle("Use ICE", isOn: $iceEnabled)
+                    .disabled(stunServer.trimmingCharacters(in: .whitespaces).isEmpty)
+                Text("Leave as-is when the PBX rewrites addresses server-side (Kalliope can).")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -131,6 +147,9 @@ struct SettingsView: View {
         transport = account.transport
         outsidePrefix = account.dialPlan.outsideLinePrefix
         internationalPrefix = account.dialPlan.internationalPrefix ?? ""
+        natRewrite = account.natRewrite
+        stunServer = account.stunServer ?? ""
+        iceEnabled = account.iceEnabled
         if account.isConfigured {
             password = KeychainStore.password(for: account.keychainKey) ?? ""
         }
@@ -140,11 +159,15 @@ struct SettingsView: View {
         let plan = DialPlan(
             outsideLinePrefix: outsidePrefix,
             internationalPrefix: internationalPrefix.isEmpty ? nil : internationalPrefix)
+        let stun = stunServer.trimmingCharacters(in: .whitespaces)
         let config = AccountConfig(
             domain: domain.trimmingCharacters(in: .whitespaces),
             username: username.trimmingCharacters(in: .whitespaces),
             transport: transport,
-            dialPlan: plan)
+            dialPlan: plan,
+            natRewrite: natRewrite,
+            stunServer: stun.isEmpty ? nil : stun,
+            iceEnabled: iceEnabled && !stun.isEmpty)
         engine.applyAccount(config, password: password)
     }
 }

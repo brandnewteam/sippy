@@ -7,7 +7,7 @@ struct SippyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        WindowGroup("Sippy") {
+        WindowGroup("Sippy", id: "main") {
             MainView()
                 .environment(appDelegate.engine)
                 .environment(appDelegate.systemContacts)
@@ -39,9 +39,21 @@ struct SippyApp: App {
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
 
+        // Registration status + quick dial while the main window is closed
+        // (the engine keeps running window-less since M3).
+        MenuBarExtra {
+            MenuBarView()
+                .environment(appDelegate.engine)
+                .environment(appDelegate.store)
+        } label: {
+            MenuBarIcon()
+                .environment(appDelegate.engine)
+        }
+
         Settings {
             SettingsView()
                 .environment(appDelegate.engine)
+                .environment(appDelegate.ringtones)
         }
     }
 }

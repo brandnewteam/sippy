@@ -11,10 +11,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let engine = SIPEngine()
     let store = AppStore()
     let systemContacts = SystemContactsIndex()
+    let ringtones = RingtoneLibrary()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         wireUp()
         engine.start()
+        engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
         systemContacts.loadIfAuthorized()
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()

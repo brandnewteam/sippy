@@ -14,19 +14,37 @@ public struct AccountConfig: Codable, Equatable, Sendable {
     /// Ordered codec priority list; empty means "use the defaults" (it is
     /// reconciled against the SIP stack's codec list at startup).
     public var codecPreferences: [CodecPreference]
+    /// Ringtone filename (bundled or imported); nil = Sippy's default.
+    public var ringtone: String?
+    /// Rewrite Contact/Via with the public address learned from responses
+    /// (received/rport) — Telephone's "Update IP Address". On by default;
+    /// harmless when the PBX fixes it server-side.
+    public var natRewrite: Bool
+    /// Optional STUN server (host or host:port) for NAT traversal.
+    public var stunServer: String?
+    /// Use ICE candidate negotiation (needs a STUN server to be useful).
+    public var iceEnabled: Bool
 
     public init(
         domain: String = "",
         username: String = "",
         transport: Transport = .udp,
         dialPlan: DialPlan = DialPlan(),
-        codecPreferences: [CodecPreference] = []
+        codecPreferences: [CodecPreference] = [],
+        ringtone: String? = nil,
+        natRewrite: Bool = true,
+        stunServer: String? = nil,
+        iceEnabled: Bool = false
     ) {
         self.domain = domain
         self.username = username
         self.transport = transport
         self.dialPlan = dialPlan
         self.codecPreferences = codecPreferences
+        self.ringtone = ringtone
+        self.natRewrite = natRewrite
+        self.stunServer = stunServer
+        self.iceEnabled = iceEnabled
     }
 
     public init(from decoder: Decoder) throws {
@@ -35,9 +53,14 @@ public struct AccountConfig: Codable, Equatable, Sendable {
         username = try container.decode(String.self, forKey: .username)
         transport = try container.decode(Transport.self, forKey: .transport)
         dialPlan = try container.decode(DialPlan.self, forKey: .dialPlan)
-        // Absent in configs saved before M4.
+        // decodeIfPresent everywhere below: absent in configs from earlier
+        // milestones.
         codecPreferences =
             try container.decodeIfPresent([CodecPreference].self, forKey: .codecPreferences) ?? []
+        ringtone = try container.decodeIfPresent(String.self, forKey: .ringtone)
+        natRewrite = try container.decodeIfPresent(Bool.self, forKey: .natRewrite) ?? true
+        stunServer = try container.decodeIfPresent(String.self, forKey: .stunServer)
+        iceEnabled = try container.decodeIfPresent(Bool.self, forKey: .iceEnabled) ?? false
     }
 
     public var isConfigured: Bool { !domain.isEmpty && !username.isEmpty }

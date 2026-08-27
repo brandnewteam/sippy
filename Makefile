@@ -96,6 +96,7 @@ app: build $(ICON)
 	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
 	cp Support/Info.plist $(APP)/Contents/
 	cp $(ICON) $(APP)/Contents/Resources/
+	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Sippy
 	codesign --force --deep --sign - $(APP)
 	@echo "Built $(APP)"
