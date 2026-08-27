@@ -32,5 +32,37 @@
 	<string>Sippy can show your address book contacts and use them for caller ID.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>AGPLv3</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Phone and SIP links</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>tel</string>
+				<string>callto</string>
+				<string>sip</string>
+				<string>sips</string>
+			</array>
+		</dict>
+	</array>
+	<key>NSServices</key>
+	<array>
+		<dict>
+			<key>NSMenuItem</key>
+			<dict>
+				<key>default</key>
+				<string>Call with Sippy</string>
+			</dict>
+			<key>NSMessage</key>
+			<string>callWithSippy</string>
+			<key>NSPortName</key>
+			<string>Sippy</string>
+			<key>NSSendTypes</key>
+			<array>
+				<string>NSStringPboardType</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

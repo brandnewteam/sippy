@@ -94,6 +94,8 @@ Like Telephone's "Update IP Address" / MicroSIP's "allow IP rewrite": rewrite Co
 
 **M3 — Dial plan & OS integration.** Prefix/rules engine + settings UI, tel:/callto:/sip: URL handler, Services menu entry, paste-and-dial.
 
+*M3 findings (2026-08-27):* delivered. `DialRequest` parses tel:/callto:/sip:/sips: URLs and free text (unit-tested); bare numbers dial with origin `.external` (prefix applied — verified live: `tel:600` produced `INVITE sip:0600@…`), full SIP URIs dial verbatim. Also fixed an architecture bug this surfaced: engine startup lived in a view's `onAppear`, so a window-less launch (state restoration) never registered — startup now lives in the app delegate, where a softphone's belongs. Services menu registration may need the app in /Applications before macOS picks it up.
+
 **M4 — Codecs & inspector.** Codec preference UI with the defaults above, live traffic panel, SIP/SDP debug log with codec-negotiation view, log export.
 
 **M5 — Ringtones & polish.** Bundled ringtones, custom import, per-account selection, ring-device routing; menu bar extra; NAT/IP-rewrite account setting (§2.6); then hardening: hot-plug audio, sleep/wake re-registration, network-change handling (Wi-Fi ↔ Ethernet ↔ VPN).

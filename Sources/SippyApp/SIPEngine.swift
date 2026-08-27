@@ -164,6 +164,25 @@ public final class SIPEngine {
         }
     }
 
+    /// Entry point for URLs, the Services menu, and paste-and-dial.
+    public func handle(_ request: DialRequest) {
+        switch request {
+        case .number(let number):
+            dial(number, origin: .external)
+        case .uri(let uri):
+            dialURI(uri)
+        }
+    }
+
+    /// Dials a complete SIP URI verbatim (no dial-plan rewriting).
+    public func dialURI(_ uri: String) {
+        guard let core, call == nil else { return }
+        lastCallError = nil
+        if core.invite(url: uri) == nil {
+            lastCallError = "Could not start the call."
+        }
+    }
+
     public func answer() {
         try? activeCall?.accept()
     }
