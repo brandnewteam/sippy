@@ -16,7 +16,9 @@ let package = Package(
         // unreachable at setup time; files mirrored from download.linphone.org).
         // The binary xcframeworks are still fetched from download.linphone.org
         // on first build. See Vendor/linphone-sdk-swift-macos/VERSION.
-        .package(path: "Vendor/linphone-sdk-swift-macos")
+        .package(path: "Vendor/linphone-sdk-swift-macos"),
+        // Auto-updates (dormant until SUFeedURL is set in Info.plist).
+        .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.6.0"),
     ],
     targets: [
         // Pure Swift, no SIP dependency: dial plan, models. Heavily unit-tested.
@@ -29,6 +31,7 @@ let package = Package(
             dependencies: [
                 "SippyCore",
                 .product(name: "linphonesw", package: "linphone-sdk-swift-macos"),
+                .product(name: "Sparkle", package: "Sparkle"),
             ],
             swiftSettings: [
                 // The generated linphone wrapper predates strict concurrency.

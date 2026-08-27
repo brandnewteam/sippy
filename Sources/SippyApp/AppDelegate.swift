@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SippyCore
 
 /// Owns the app's long-lived objects and starts the SIP engine at launch.
@@ -13,7 +14,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let systemContacts = SystemContactsIndex()
     let ringtones = RingtoneLibrary()
 
+    /// Sparkle auto-updates. Dormant (nil) until an SUFeedURL is configured
+    /// in Info.plist — see README "Sparkle updates".
+    private(set) var updaterController: SPUStandardUpdaterController?
+
+    var updatesConfigured: Bool { updaterController != nil }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+           !feed.isEmpty {
+            updaterController = SPUStandardUpdaterController(
+                startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        }
         AppPresence.current.apply()
         wireUp()
         engine.start()
@@ -60,6 +72,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 outcome: outcome,
                 codec: finished.codec))
         }
+    }
+
+    @objc func checkForUpdates(_ sender: Any?) {
+        updaterController?.checkForUpdates(sender)
     }
 
     /// Matches NSMessage "callWithSippy" in the NSServices Info.plist entry.

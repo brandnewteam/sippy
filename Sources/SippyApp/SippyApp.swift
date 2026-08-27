@@ -38,6 +38,10 @@ struct SippyApp: App {
         }
         .windowResizability(.contentSize)
         .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { appDelegate.checkForUpdates(nil) }
+                    .disabled(!appDelegate.updatesConfigured)
+            }
             CommandGroup(after: .pasteboard) {
                 Button("Paste and Dial") {
                     if let text = NSPasteboard.general.string(forType: .string),

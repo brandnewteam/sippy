@@ -19,7 +19,12 @@ TEST_FLAGS := -Xswiftc -F$(TESTING_FW) -Xlinker -F$(TESTING_FW) \
               -Xlinker -rpath -Xlinker $(TESTING_FW) \
               -Xlinker -rpath -Xlinker $(TESTING_LIB)
 
-BUILD_DIR := .build/arm64-apple-macosx/debug
+# CONFIG=release for optimized builds (make app CONFIG=release, make release).
+CONFIG ?= debug
+BUILD_DIR := .build/arm64-apple-macosx/$(CONFIG)
+# deps artifacts are config-independent; always built against the debug
+# frameworks (which `swift build` fetches first).
+DEPS_BUILD_DIR := .build/arm64-apple-macosx/debug
 CHECKOUTS := .build/checkouts-manual
 HIDAPI := Vendor/lib/libhidapi.0.dylib
 MSBCG729 := Vendor/lib/libmsbcg729.so
@@ -29,10 +34,26 @@ ICON_MASTER := Support/AppIcon.png
 ICONSET := .build/Sippy.iconset
 ICON := .build/AppIcon.icns
 
-.PHONY: build test spike-codecs deps app run-app clean
+# Release signing. Default is ad-hoc; pass IDENTITY="Developer ID
+# Application: …" for distribution. The hardened runtime enables library
+# validation, which needs every framework signed by the same Team ID — ad-hoc
+# signatures have none, so hardening only goes with a real identity (where
+# our inside-out re-sign puts one team on everything, our dlopen'd G.729
+# plugin included).
+IDENTITY ?= -
+ifeq ($(IDENTITY),-)
+SIGN_FLAGS :=
+else
+SIGN_FLAGS := --options runtime --timestamp
+endif
+VERSION := $(shell /usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Support/Info.plist)
+ZIP := dist/Sippy-$(VERSION).zip
+NOTARY_PROFILE ?= sippy
+
+.PHONY: build test spike-codecs deps app run-app release notarize clean
 
 build: deps
-	swift build
+	swift build -c $(CONFIG)
 	cp -f $(HIDAPI) $(BUILD_DIR)/
 
 test:
@@ -58,14 +79,14 @@ $(HIDAPI):
 # them, hence the bootstrap build without the plugin present.
 $(MSBCG729):
 	mkdir -p Vendor/lib $(CHECKOUTS)
-	test -d $(BUILD_DIR)/mediastreamer2.framework || swift build
+	test -d $(DEPS_BUILD_DIR)/mediastreamer2.framework || swift build
 	test -d $(CHECKOUTS)/bcg729 || git clone --depth 1 \
 	    https://github.com/BelledonneCommunications/bcg729.git $(CHECKOUTS)/bcg729
 	clang -dynamiclib -O2 \
 	    -I$(CHECKOUTS)/bcg729/include -I$(CHECKOUTS)/bcg729/src \
 	    $(CHECKOUTS)/bcg729/src/*.c \
 	    Vendor/msbcg729/g729.c Vendor/msbcg729/msbcg729_plugin_init.c \
-	    -F$(BUILD_DIR) -framework mediastreamer2 -framework ortp -framework bctoolbox \
+	    -F$(DEPS_BUILD_DIR) -framework mediastreamer2 -framework ortp -framework bctoolbox \
 	    -install_name @rpath/libmsbcg729.so \
 	    -o $(MSBCG729)
 
@@ -91,18 +112,45 @@ $(ICON): $(ICON_MASTER)
 app: build $(ICON)
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Frameworks $(APP)/Contents/Resources
-	cp .build/arm64-apple-macosx/debug/Sippy $(APP)/Contents/MacOS/
-	cp -R .build/arm64-apple-macosx/debug/*.framework $(APP)/Contents/Frameworks/
+	cp $(BUILD_DIR)/Sippy $(APP)/Contents/MacOS/
+	cp -R $(BUILD_DIR)/*.framework $(APP)/Contents/Frameworks/
+	@# Sparkle is a binary SPM artifact; SwiftPM leaves it under .build/artifacts.
+	sparkle_fw=$$(find .build/artifacts -type d -name Sparkle.framework -path '*macos*' 2>/dev/null | head -1); \
+	    if [ -n "$$sparkle_fw" ]; then cp -R "$$sparkle_fw" $(APP)/Contents/Frameworks/; fi
 	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
 	cp Support/Info.plist $(APP)/Contents/
 	cp $(ICON) $(APP)/Contents/Resources/
 	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Sippy
-	codesign --force --deep --sign - $(APP)
-	@echo "Built $(APP)"
+	@# Sign inside-out (nested code first) — required for the hardened runtime;
+	@# --deep is deprecated and signs nested code with no flags.
+	find $(APP)/Contents/Frameworks -maxdepth 1 \
+	    \( -name '*.framework' -o -name '*.dylib' -o -name '*.so' \) | \
+	    while read -r item; do \
+	        codesign --force $(SIGN_FLAGS) --sign "$(IDENTITY)" "$$item" || exit 1; \
+	    done
+	codesign --force $(SIGN_FLAGS) --entitlements Support/Sippy.entitlements \
+	    --sign "$(IDENTITY)" $(APP)
+	codesign --verify --deep --strict $(APP)
+	@echo "Built $(APP) ($(CONFIG), identity: $(IDENTITY))"
 
 run-app: app
 	open $(APP)
+
+# Optimized, signed, zipped for distribution. Ad-hoc unless IDENTITY is a
+# Developer ID; see README "Release builds".
+release:
+	$(MAKE) app CONFIG=release IDENTITY="$(IDENTITY)"
+	ditto -c -k --keepParent $(APP) $(ZIP)
+	@echo "Release archive: $(ZIP)"
+
+# Requires stored credentials:
+#   xcrun notarytool store-credentials sippy --apple-id … --team-id … --password …
+notarize:
+	xcrun notarytool submit $(ZIP) --keychain-profile $(NOTARY_PROFILE) --wait
+	xcrun stapler staple $(APP)
+	ditto -c -k --keepParent $(APP) $(ZIP)
+	@echo "Notarized and stapled: $(ZIP)"
 
 clean:
 	swift package clean
