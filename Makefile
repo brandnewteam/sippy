@@ -93,19 +93,29 @@ $(MSBCG729):
 # Assembles a runnable Sippy.app without Xcode: SPM binary + SDK frameworks +
 # our plugin dylibs + Info.plist, ad-hoc signed. The extra rpath makes the
 # bundle self-contained; the SPM build-dir rpath stays for dev convenience.
-$(ICON): $(ICON_MASTER)
+# macOS 26 masks app icons into its squircle itself, but only fully opaque
+# full-bleed artwork qualifies — edge transparency (our master's pre-rounded
+# corners) triggers the shrunken gray "default treatment" instead. Zoom-crop
+# the master to full bleed first; the system applies the rounding.
+FULLBLEED := .build/AppIcon-fullbleed.png
+
+$(FULLBLEED): $(ICON_MASTER) Tools/make_fullbleed_icon.swift
+	mkdir -p .build
+	swift Tools/make_fullbleed_icon.swift $(ICON_MASTER) $(FULLBLEED)
+
+$(ICON): $(FULLBLEED)
 	rm -rf $(ICONSET)
 	mkdir -p $(ICONSET)
-	sips -z 16 16 $(ICON_MASTER) --out $(ICONSET)/icon_16x16.png
-	sips -z 32 32 $(ICON_MASTER) --out $(ICONSET)/icon_16x16@2x.png
-	sips -z 32 32 $(ICON_MASTER) --out $(ICONSET)/icon_32x32.png
-	sips -z 64 64 $(ICON_MASTER) --out $(ICONSET)/icon_32x32@2x.png
-	sips -z 128 128 $(ICON_MASTER) --out $(ICONSET)/icon_128x128.png
-	sips -z 256 256 $(ICON_MASTER) --out $(ICONSET)/icon_128x128@2x.png
-	sips -z 256 256 $(ICON_MASTER) --out $(ICONSET)/icon_256x256.png
-	sips -z 512 512 $(ICON_MASTER) --out $(ICONSET)/icon_256x256@2x.png
-	sips -z 512 512 $(ICON_MASTER) --out $(ICONSET)/icon_512x512.png
-	cp $(ICON_MASTER) $(ICONSET)/icon_512x512@2x.png
+	sips -z 16 16 $(FULLBLEED) --out $(ICONSET)/icon_16x16.png
+	sips -z 32 32 $(FULLBLEED) --out $(ICONSET)/icon_16x16@2x.png
+	sips -z 32 32 $(FULLBLEED) --out $(ICONSET)/icon_32x32.png
+	sips -z 64 64 $(FULLBLEED) --out $(ICONSET)/icon_32x32@2x.png
+	sips -z 128 128 $(FULLBLEED) --out $(ICONSET)/icon_128x128.png
+	sips -z 256 256 $(FULLBLEED) --out $(ICONSET)/icon_128x128@2x.png
+	sips -z 256 256 $(FULLBLEED) --out $(ICONSET)/icon_256x256.png
+	sips -z 512 512 $(FULLBLEED) --out $(ICONSET)/icon_256x256@2x.png
+	sips -z 512 512 $(FULLBLEED) --out $(ICONSET)/icon_512x512.png
+	cp $(FULLBLEED) $(ICONSET)/icon_512x512@2x.png
 	iconutil -c icns $(ICONSET) -o $(ICON)
 	rm -rf $(ICONSET)
 
