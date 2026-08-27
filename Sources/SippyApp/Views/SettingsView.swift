@@ -1,3 +1,4 @@
+import ServiceManagement
 import SwiftUI
 import SippyCore
 
@@ -18,6 +19,8 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
+            GeneralSettingsTab()
+                .tabItem { Label("General", systemImage: "gearshape") }
             accountTab
                 .tabItem { Label("Account", systemImage: "person.crop.circle") }
             audioTab

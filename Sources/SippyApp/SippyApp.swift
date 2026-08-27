@@ -5,6 +5,23 @@ import SippyCore
 @main
 struct SippyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
+
+    /// Two-way: Settings drives it via AppStorage, and if the user removes
+    /// the extra some other way we fall back to Dock-only so the app never
+    /// becomes unreachable.
+    private var menuBarInserted: Binding<Bool> {
+        Binding(
+            get: { AppPresence(rawValue: presenceRaw)?.showsMenuBarExtra ?? true },
+            set: { inserted in
+                let presence: AppPresence =
+                    inserted
+                    ? (AppPresence(rawValue: presenceRaw) == .dockOnly ? .dockAndMenuBar : AppPresence.current)
+                    : .dockOnly
+                presenceRaw = presence.rawValue
+                presence.apply()
+            })
+    }
 
     var body: some Scene {
         WindowGroup("Sippy", id: "main") {
@@ -41,7 +58,7 @@ struct SippyApp: App {
 
         // Registration status + quick dial while the main window is closed
         // (the engine keeps running window-less since M3).
-        MenuBarExtra {
+        MenuBarExtra(isInserted: menuBarInserted) {
             MenuBarView()
                 .environment(appDelegate.engine)
                 .environment(appDelegate.store)

@@ -14,6 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let ringtones = RingtoneLibrary()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AppPresence.current.apply()
         wireUp()
         engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
