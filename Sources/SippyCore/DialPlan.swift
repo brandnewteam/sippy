@@ -16,7 +16,7 @@ public enum NumberOrigin: Sendable, Equatable {
 }
 
 /// Per-account dialing rules applied before a number reaches the SIP stack.
-public struct DialPlan: Sendable, Equatable {
+public struct DialPlan: Sendable, Equatable, Codable {
     /// Prepended to numbers from prefixed origins. Arbitrary string, e.g. "0",
     /// "9" or "0*4". Empty string disables prefixing.
     public var outsideLinePrefix: String

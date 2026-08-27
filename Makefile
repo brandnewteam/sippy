@@ -24,7 +24,9 @@ CHECKOUTS := .build/checkouts-manual
 HIDAPI := Vendor/lib/libhidapi.0.dylib
 MSBCG729 := Vendor/lib/libmsbcg729.so
 
-.PHONY: build test spike-codecs deps clean
+APP := dist/Sippy.app
+
+.PHONY: build test spike-codecs deps app run-app clean
 
 build: deps
 	swift build
@@ -64,5 +66,23 @@ $(MSBCG729):
 	    -install_name @rpath/libmsbcg729.so \
 	    -o $(MSBCG729)
 
+# Assembles a runnable Sippy.app without Xcode: SPM binary + SDK frameworks +
+# our plugin dylibs + Info.plist, ad-hoc signed. The extra rpath makes the
+# bundle self-contained; the SPM build-dir rpath stays for dev convenience.
+app: build
+	rm -rf $(APP)
+	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Frameworks $(APP)/Contents/Resources
+	cp .build/arm64-apple-macosx/debug/Sippy $(APP)/Contents/MacOS/
+	cp -R .build/arm64-apple-macosx/debug/*.framework $(APP)/Contents/Frameworks/
+	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
+	cp Support/Info.plist $(APP)/Contents/
+	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Sippy
+	codesign --force --deep --sign - $(APP)
+	@echo "Built $(APP)"
+
+run-app: app
+	open $(APP)
+
 clean:
 	swift package clean
+	rm -rf dist

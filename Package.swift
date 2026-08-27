@@ -8,6 +8,7 @@ let package = Package(
     ],
     products: [
         .library(name: "SippyCore", targets: ["SippyCore"]),
+        .executable(name: "Sippy", targets: ["SippyApp"]),
         .executable(name: "sippy-spike", targets: ["sippy-spike"]),
     ],
     dependencies: [
@@ -20,6 +21,20 @@ let package = Package(
     targets: [
         // Pure Swift, no SIP dependency: dial plan, models. Heavily unit-tested.
         .target(name: "SippyCore"),
+
+        // The macOS app. Built as a plain executable by SwiftPM; `make app`
+        // wraps it into Sippy.app with the frameworks and Info.plist.
+        .executableTarget(
+            name: "SippyApp",
+            dependencies: [
+                "SippyCore",
+                .product(name: "linphonesw", package: "linphone-sdk-swift-macos"),
+            ],
+            swiftSettings: [
+                // The generated linphone wrapper predates strict concurrency.
+                .swiftLanguageMode(.v5)
+            ]
+        ),
 
         // M0 throwaway CLI to validate the SDK: codec list, registration, calls.
         .executableTarget(

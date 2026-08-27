@@ -5,3 +5,4 @@
 xcuserdata/
 Vendor/lib/
 .env
+dist/

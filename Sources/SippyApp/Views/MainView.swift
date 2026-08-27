@@ -1,0 +1,54 @@
+import SwiftUI
+import SippyCore
+
+struct MainView: View {
+    @Environment(SIPEngine.self) private var engine
+
+    var body: some View {
+        VStack(spacing: 0) {
+            RegistrationBanner()
+            Divider()
+            if engine.call != nil {
+                CallView()
+            } else {
+                DialpadView()
+            }
+        }
+    }
+}
+
+struct RegistrationBanner: View {
+    @Environment(SIPEngine.self) private var engine
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle().fill(color).frame(width: 9, height: 9)
+            Text(label).font(.callout)
+            Spacer()
+            if case .unconfigured = engine.registration {
+                Button("Set Up…") { openSettings() }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+    }
+
+    private var color: Color {
+        switch engine.registration {
+        case .registered: .green
+        case .connecting: .yellow
+        case .failed: .red
+        case .unconfigured: .gray
+        }
+    }
+
+    private var label: String {
+        switch engine.registration {
+        case .registered: "\(engine.account.username)@\(engine.account.domain)"
+        case .connecting: "Connecting…"
+        case .failed(let message): "Registration failed: \(message)"
+        case .unconfigured: "No account configured"
+        }
+    }
+}
