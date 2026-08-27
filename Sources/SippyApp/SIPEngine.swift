@@ -160,7 +160,7 @@ public final class SIPEngine {
                 stored: account.codecPreferences, available: snapshotAvailableCodecs())
             applyCodecPreferencesToCore()
             if account.isConfigured {
-                applyAccount(account, password: KeychainStore.password(for: account.keychainKey) ?? "")
+                loadStoredCredentialsAndRegister()
             }
             startHardeningMonitors()
         } catch {
@@ -170,8 +170,24 @@ public final class SIPEngine {
 
     // MARK: - Account
 
+    /// Reads the stored password off the main thread: the keychain item's
+    /// ACL is bound to the code signature, which changes with every ad-hoc
+    /// rebuild, so SecItemCopyMatching can block on an authorization dialog —
+    /// doing that on the main thread at launch beachballs the whole app.
+    private func loadStoredCredentialsAndRegister() {
+        let key = account.keychainKey
+        registration = .connecting
+        Task.detached(priority: .userInitiated) {
+            let password = KeychainStore.password(for: key) ?? ""
+            await MainActor.run { [weak self] in
+                guard let self else { return }
+                self.configureCore(with: self.account, password: password)
+            }
+        }
+    }
+
     public func applyAccount(_ config: AccountConfig, password: String) {
-        guard let core else { return }
+        guard core != nil else { return }
         // Codec preferences and the ringtone are managed by their own
         // settings UIs, not the account form — carry the current values over.
         var config = config
@@ -179,8 +195,15 @@ public final class SIPEngine {
         config.ringtone = account.ringtone
         account = config
         AccountConfigStore.save(config)
+        // User-initiated (Apply button), so a keychain prompt here is fine.
         KeychainStore.setPassword(password, for: config.keychainKey)
+        configureCore(with: config, password: password)
+    }
 
+    /// Points the SIP stack at the account — everything after credentials
+    /// are in hand. Never touches the keychain.
+    private func configureCore(with config: AccountConfig, password: String) {
+        guard let core else { return }
         core.clearAccounts()
         core.clearAllAuthInfo()
         guard config.isConfigured else {
