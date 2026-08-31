@@ -761,7 +761,7 @@ public final class SIPEngine {
         case .End:
             call?.phase = .ending
         case .Error:
-            lastCallError = message
+            lastCallError = Self.describeCallError(stackMessage: message, info: lpCall.errorInfo)
             call?.phase = .ending
         case .Released:
             if let info = call {
@@ -782,6 +782,21 @@ public final class SIPEngine {
         case .Idle, .IncomingEarlyMedia, .Referred:
             break
         }
+    }
+
+    /// "SIP 480 Temporarily Unavailable — Reason: Q.850 cause 21" instead of
+    /// liblinphone's bare state message; the Reason header is where a PBX
+    /// says *why* (DND, forward loop, …).
+    private static func describeCallError(stackMessage: String, info: ErrorInfo?) -> String {
+        let sub = info?.subErrorInfo
+        return CallFailureFormatter.describe(
+            stackMessage: stackMessage,
+            proto: info?.proto,
+            code: info?.protocolCode ?? 0,
+            phrase: info?.phrase,
+            reasonProtocol: sub?.proto,
+            reasonCode: sub?.protocolCode ?? 0,
+            reasonPhrase: sub?.phrase)
     }
 
     private func makeInfo(for lpCall: Call, phase: CallPhase, startedAt: Date? = nil) -> CallInfo {
