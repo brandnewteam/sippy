@@ -10,14 +10,19 @@
 #     the plugin must keep the .so extension.
 #  3. CLT ships Testing.framework off the default search paths, and its
 #     interop dylib in yet another directory, so `swift test` needs explicit
-#     -F/-rpath flags.
+#     -F/-rpath flags. Full Xcode (e.g. on CI) finds it on its own, so the
+#     flags only apply when the active developer dir is the CLT.
 
 CLT := /Library/Developer/CommandLineTools
 TESTING_FW := $(CLT)/Library/Developer/Frameworks
 TESTING_LIB := $(CLT)/Library/Developer/usr/lib
+ifeq ($(shell xcode-select -p 2>/dev/null),$(CLT))
 TEST_FLAGS := -Xswiftc -F$(TESTING_FW) -Xlinker -F$(TESTING_FW) \
               -Xlinker -rpath -Xlinker $(TESTING_FW) \
               -Xlinker -rpath -Xlinker $(TESTING_LIB)
+else
+TEST_FLAGS :=
+endif
 
 # CONFIG=release for optimized builds (make app CONFIG=release, make release).
 CONFIG ?= debug

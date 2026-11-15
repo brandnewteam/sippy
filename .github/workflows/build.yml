@@ -1,0 +1,99 @@
+# Builds and tests Sippy with full Xcode on a GitHub macOS runner.
+#
+# - Pull requests (and manual runs): unit tests + an optimized, ad-hoc signed
+#   Sippy.app, uploaded as a workflow artifact so it can be tried without a
+#   local toolchain.
+# - Published GitHub releases: same build, then a separate job (the only one
+#   with a write token) attaches the zip to the release. The tag must match
+#   CFBundleShortVersionString (v0.1.0 or 0.1.0).
+#
+# Signing stays ad-hoc (Makefile default): no Developer ID or notarization
+# yet, so a downloaded build needs its quarantine flag cleared to open.
+
+name: Build
+
+on:
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-26
+    timeout-minutes: 45
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          xcode-select -p
+          xcodebuild -version
+          swift --version
+
+      - name: Version
+        id: version
+        run: |
+          version=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' Support/Info.plist)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.event_name }}" = release ]; then
+            tag="${{ github.event.release.tag_name }}"
+            if [ "${tag#v}" != "$version" ]; then
+              echo "::error::Release tag $tag doesn't match Info.plist version $version"
+              exit 1
+            fi
+          fi
+
+      # SwiftPM keeps downloaded binary artifacts (linphone xcframeworks,
+      # Sparkle) in its shared cache; reusing it skips the linphone.org fetch.
+      - name: Cache SwiftPM downloads
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('Package.resolved', 'Vendor/linphone-sdk-swift-macos/Package.swift') }}
+          restore-keys: spm-${{ runner.os }}-
+
+      - name: Test
+        run: make test
+
+      - name: Build app (release, ad-hoc signed)
+        run: make release
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Sippy-${{ steps.version.outputs.version }}-${{ github.event.pull_request.head.sha || github.sha }}
+          path: dist/Sippy-${{ steps.version.outputs.version }}.zip
+          retention-days: 14
+          if-no-files-found: error
+
+  # The only job with a write token, and it runs no project code: it just
+  # attaches the zip the build job produced. PR and manual runs skip it.
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sippy-${{ needs.build.outputs.version }}-${{ github.sha }}
+
+      - name: Attach to release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "Sippy-${{ needs.build.outputs.version }}.zip" \
+            --repo "${{ github.repository }}" --clobber
