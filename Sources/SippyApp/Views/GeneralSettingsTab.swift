@@ -4,8 +4,8 @@ import SwiftUI
 /// Settings → General: login item and where the app shows itself.
 struct GeneralSettingsTab: View {
     @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
-    @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
-    @State private var loginItemError: String?
+    @ViewState private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @ViewState private var loginItemError: String?
 
     var body: some View {
         Form {

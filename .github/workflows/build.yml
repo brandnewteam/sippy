@@ -40,6 +40,15 @@ jobs:
           xcodebuild -version
           swift --version
 
+      # CI has full Xcode, so a plain @State would build here but break
+      # Command Line Tools builds (see Sources/SippyApp/Views/ViewState.swift).
+      - name: No @State (use @ViewState)
+        run: |
+          if grep -rnE '^[^/]*@State([^A-Za-z0-9_]|$)' Sources; then
+            echo "::error::Use @ViewState instead of @State (see Sources/SippyApp/Views/ViewState.swift)"
+            exit 1
+          fi
+
       - name: Version
         id: version
         run: |
