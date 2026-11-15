@@ -3,7 +3,7 @@ import Security
 
 /// Minimal generic-password Keychain wrapper for SIP account passwords.
 public enum KeychainStore {
-    public static let service = "com.mcdado.Sippy"
+    public static let service = "sm.3dprint.Sippy"
 
     public static func password(for account: String) -> String? {
         let query: [String: Any] = [
