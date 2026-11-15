@@ -35,6 +35,8 @@ HIDAPI := Vendor/lib/libhidapi.0.dylib
 MSBCG729 := Vendor/lib/libmsbcg729.so
 
 APP := dist/Sippy.app
+# Sippy.icon is the editable source. AppIcon.png is the full-bleed raster
+# master used to generate the ICNS with Command Line Tools.
 ICON_MASTER := Support/AppIcon.png
 ICONSET := .build/Sippy.iconset
 ICON := .build/AppIcon.icns
@@ -99,9 +101,8 @@ $(MSBCG729):
 # our plugin dylibs + Info.plist, ad-hoc signed. The extra rpath makes the
 # bundle self-contained; the SPM build-dir rpath stays for dev convenience.
 # macOS 26 masks app icons into its squircle itself, but only fully opaque
-# full-bleed artwork qualifies — edge transparency (our master's pre-rounded
-# corners) triggers the shrunken gray "default treatment" instead. Zoom-crop
-# the master to full bleed first; the system applies the rounding.
+# full-bleed artwork qualifies. Zoom-crop any rounded master to full bleed
+# so the system can apply its own rounding.
 FULLBLEED := .build/AppIcon-fullbleed.png
 
 $(FULLBLEED): $(ICON_MASTER) Tools/make_fullbleed_icon.swift
