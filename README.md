@@ -57,6 +57,12 @@ make notarize NOTARY_PROFILE=sippy             # submit to Apple + staple
 
 The version comes from `CFBundleShortVersionString` in `Support/Info.plist`.
 
+### CI
+
+`.github/workflows/build.yml` runs on a GitHub macOS runner with full Xcode. On every pull request it runs `make test` and `make release`, then uploads the ad-hoc signed zip as a workflow artifact (kept 14 days) so the PR can be tried without a local toolchain. Publishing a GitHub release does the same and attaches `Sippy-<version>.zip` to the release; the tag (`v0.1.0` or `0.1.0`) must match the Info.plist version. It can also be started by hand from the Actions tab.
+
+CI builds are ad-hoc signed, so macOS quarantines them after download: after unzipping, clear the flag with `xattr -dr com.apple.quarantine Sippy.app` (or right-click → Open).
+
 ### Sparkle updates
 
 The app bundles [Sparkle](https://sparkle-project.org) and shows "Check for Updates…" in the app menu once a feed is configured. To enable updates: generate EdDSA keys with Sparkle's `generate_keys`, put the public key in `SUPublicEDKey` and the appcast URL in `SUFeedURL` (both in `Support/Info.plist`), and publish release zips plus an `appcast.xml` (GitHub Releases works well). With `SUFeedURL` empty the updater stays dormant.
