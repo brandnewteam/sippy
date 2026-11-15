@@ -3,8 +3,9 @@
 # - Pull requests (and manual runs): unit tests + an optimized, ad-hoc signed
 #   Sippy.app, uploaded as a workflow artifact so it can be tried without a
 #   local toolchain.
-# - Published GitHub releases: same build, and the zip is attached to the
-#   release. The tag must match CFBundleShortVersionString (v0.1.0 or 0.1.0).
+# - Published GitHub releases: same build, then a separate job (the only one
+#   with a write token) attaches the zip to the release. The tag must match
+#   CFBundleShortVersionString (v0.1.0 or 0.1.0).
 #
 # Signing stays ad-hoc (Makefile default): no Developer ID or notarization
 # yet, so a downloaded build needs its quarantine flag cleared to open.
@@ -28,8 +29,8 @@ jobs:
   build:
     runs-on: macos-26
     timeout-minutes: 45
-    permissions:
-      contents: write # release upload only; PRs from forks get read-only anyway
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,10 +76,24 @@ jobs:
           retention-days: 14
           if-no-files-found: error
 
+  # The only job with a write token, and it runs no project code: it just
+  # attaches the zip the build job produced. PR and manual runs skip it.
+  release:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Sippy-${{ needs.build.outputs.version }}-${{ github.sha }}
+
       - name: Attach to release
-        if: github.event_name == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release upload "${{ github.event.release.tag_name }}" \
-            "dist/Sippy-${{ steps.version.outputs.version }}.zip" --clobber
+            "Sippy-${{ needs.build.outputs.version }}.zip" \
+            --repo "${{ github.repository }}" --clobber
