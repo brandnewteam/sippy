@@ -6,17 +6,17 @@ struct SettingsView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(RingtoneLibrary.self) private var ringtones
 
-    @State private var domain = ""
-    @State private var username = ""
-    @State private var password = ""
-    @State private var transport: AccountConfig.Transport = .udp
-    @State private var outsidePrefix = ""
-    @State private var internationalPrefix = ""
-    @State private var natRewrite = true
-    @State private var stunServer = ""
-    @State private var iceEnabled = false
-    @State private var requireRoute = false
-    @State private var loaded = false
+    @ViewState private var domain = ""
+    @ViewState private var username = ""
+    @ViewState private var password = ""
+    @ViewState private var transport: AccountConfig.Transport = .udp
+    @ViewState private var outsidePrefix = ""
+    @ViewState private var internationalPrefix = ""
+    @ViewState private var natRewrite = true
+    @ViewState private var stunServer = ""
+    @ViewState private var iceEnabled = false
+    @ViewState private var requireRoute = false
+    @ViewState private var loaded = false
 
     var body: some View {
         TabView {

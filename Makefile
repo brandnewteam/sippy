@@ -1,6 +1,6 @@
 # Sippy build helper — works with Command Line Tools only (no Xcode).
 #
-# Three CLT/SDK quirks are handled here:
+# Four CLT/SDK quirks are handled here:
 #  1. linphone.framework references @rpath/libhidapi.0.dylib but the linphone
 #     macOS SDK doesn't ship it (their packaging bug). `make deps` builds it
 #     from source; build targets copy it next to the frameworks in .build/.
@@ -8,20 +8,22 @@
 #     (bcg729 + mediastreamer2's g729.c filter, sources in Vendor/msbcg729/)
 #     as a mediastreamer2 plugin. mediastreamer2 only scans for libms*.so, so
 #     the plugin must keep the .so extension.
-#  3. CLT ships Testing.framework off the default search paths, and its
-#     interop dylib in yet another directory, so `swift test` needs explicit
-#     -F/-rpath flags. Full Xcode (e.g. on CI) finds it on its own, so the
-#     flags only apply when the active developer dir is the CLT.
+#  3. From the macOS 27 SDK on, SwiftUI's @State is a macro whose compiler
+#     plugin (SwiftUIMacros) ships only with Xcode, not the CLT. The views
+#     use @ViewState instead (Sources/SippyApp/Views/ViewState.swift), an
+#     alias of the same State property wrapper that bypasses the macro.
+#  4. SwiftPM 6.4's build system finds the CLT's Testing.framework on its own,
+#     but hands the compiler only the macro plugins in the top-level plugins
+#     dir; Testing's sits in plugins/testing/, so @Test/@Suite fail with
+#     "plugin for module 'TestingMacros' not found". `make test` loads it
+#     explicitly. Full Xcode (e.g. on CI) doesn't need this.
 
 CLT := /Library/Developer/CommandLineTools
-TESTING_FW := $(CLT)/Library/Developer/Frameworks
-TESTING_LIB := $(CLT)/Library/Developer/usr/lib
+TESTING_MACROS := $(CLT)/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib
 ifeq ($(shell xcode-select -p 2>/dev/null),$(CLT))
-TEST_FLAGS := -Xswiftc -F$(TESTING_FW) -Xlinker -F$(TESTING_FW) \
-              -Xlinker -rpath -Xlinker $(TESTING_FW) \
-              -Xlinker -rpath -Xlinker $(TESTING_LIB)
+TEST_FLAGS ?= $(if $(wildcard $(TESTING_MACROS)),-Xswiftc -load-plugin-library -Xswiftc $(TESTING_MACROS))
 else
-TEST_FLAGS :=
+TEST_FLAGS ?=
 endif
 
 # CONFIG=release for optimized builds (make app CONFIG=release, make release).

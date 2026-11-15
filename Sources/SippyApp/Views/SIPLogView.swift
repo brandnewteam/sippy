@@ -8,9 +8,9 @@ import SippyCore
 struct SIPLogView: View {
     @Environment(SIPEngine.self) private var engine
 
-    @State private var filter = ""
-    @State private var selectedID: UUID?
-    @State private var showNegotiation = true
+    @ViewState private var filter = ""
+    @ViewState private var selectedID: UUID?
+    @ViewState private var showNegotiation = true
 
     private var filteredEntries: [SIPTraceEntry] {
         let query = filter.trimmingCharacters(in: .whitespaces)

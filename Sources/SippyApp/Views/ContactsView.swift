@@ -6,9 +6,9 @@ struct ContactsView: View {
     @Environment(AppStore.self) private var store
     @Environment(SystemContactsIndex.self) private var systemContacts
 
-    @State private var search = ""
-    @State private var editing: SippyContact?
-    @State private var creating = false
+    @ViewState private var search = ""
+    @ViewState private var editing: SippyContact?
+    @ViewState private var creating = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -186,8 +186,8 @@ struct ContactEditor: View {
 
     let contact: SippyContact?
 
-    @State private var draft = SippyContact(name: "", numbers: [ContactNumber(label: "extension", value: "")])
-    @State private var loaded = false
+    @ViewState private var draft = SippyContact(name: "", numbers: [ContactNumber(label: "extension", value: "")])
+    @ViewState private var loaded = false
 
     var body: some View {
         VStack(spacing: 0) {

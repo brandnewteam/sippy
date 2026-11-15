@@ -18,7 +18,7 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 
 ## Building
 
-Requires only the Xcode **Command Line Tools** (full Xcode not needed) and git.
+Requires only the Xcode **Command Line Tools** (full Xcode not needed) and git. In SwiftUI views write `@ViewState` instead of `@State`: from the macOS 27 SDK on, `@State` is a macro whose compiler plugin only ships with full Xcode (see `Sources/SippyApp/Views/ViewState.swift`).
 
 ```sh
 make deps      # one-time: builds libhidapi + the G.729 plugin (see below)

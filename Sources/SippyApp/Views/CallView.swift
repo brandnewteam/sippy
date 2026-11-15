@@ -3,8 +3,8 @@ import SippyCore
 
 struct CallView: View {
     @Environment(SIPEngine.self) private var engine
-    @State private var showDTMFPad = false
-    @State private var showStats = false
+    @ViewState private var showDTMFPad = false
+    @ViewState private var showStats = false
 
     var body: some View {
         guard let call = engine.call else { return AnyView(EmptyView()) }

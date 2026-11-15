@@ -3,7 +3,7 @@ import SippyCore
 
 struct DialpadView: View {
     @Environment(SIPEngine.self) private var engine
-    @State private var number = ""
+    @ViewState private var number = ""
     @FocusState private var fieldFocused: Bool
 
     /// nil label means the key has no letters row.
