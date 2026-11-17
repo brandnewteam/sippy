@@ -13,6 +13,7 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 - **Inspector** — per-call live stats (codec, encryption, ICE, RTT, jitter, loss, bandwidth sparklines) and a SIP Log window (⇧⌘L) with message capture, filtering, offered-vs-answered SDP codec view, and export.
 - **Ringtones** — six bundled ringtones from Ubuntu Touch's [lomiri-sounds](https://gitlab.com/ubports/development/core/lomiri-sounds) (CC0 and CC BY, credited in [`Support/Ringtones/CREDITS.md`](Support/Ringtones/CREDITS.md); `Tools/fetch_ringtones.py` re-fetches and converts them), custom import, and ring-device routing (ring on speakers, talk on headset).
 - **At home on macOS** — menu bar extra with quick answer/hang-up and favorites speed-dial, start at login, Dock/menu-bar presence choice, re-registration on network change and wake.
+- **Themes** — the main window is a single coloured pane taken from the app icon: three schemes (Enamel, Night Signal, Vivid), each dark or light or following the system, with the Dialpad / Contacts / History tabs in the title bar or as a bottom tab bar (Settings › General).
 - **NAT traversal** — received/rport IP rewrite toggle, optional STUN/ICE.
 - **VPN-aware registration** (opt-in) — register only while a route to the server exists. For PBXes reached over a VPN: no timeout noise while the tunnel is down, instant re-register when it comes up. Private server addresses need a specific (VPN-pushed or LAN) route; the catch-all default route doesn't count.
 

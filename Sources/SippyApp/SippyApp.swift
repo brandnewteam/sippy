@@ -42,6 +42,10 @@ struct SippyApp: App {
                     }
                 }
         }
+        // No title bar of its own: the theme's pane runs to the top edge
+        // and MainView puts the tabs (or the status) beside the traffic
+        // lights.
+        .windowStyle(.hiddenTitleBar)
         .windowResizability(.contentSize)
         .defaultSize(width: SippyLayout.mainWidth, height: SippyLayout.mainIdealHeight)
         .commands {

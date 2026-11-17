@@ -4,6 +4,7 @@ import SippyCore
 struct DialpadView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(AppStore.self) private var store
+    @Environment(\.sippyTheme) private var theme
     @Binding var number: String
     @FocusState private var fieldFocused: Bool
 
@@ -33,7 +34,8 @@ struct DialpadView: View {
         VStack(spacing: 2) {
             TextField("Number", text: $number)
                 .textFieldStyle(.plain)
-                .font(.system(size: 30, weight: .light, design: .rounded))
+                .font(numberFont)
+                .foregroundStyle(theme.timerHero ? theme.accent : theme.ink)
                 .monospacedDigit()
                 .multilineTextAlignment(.center)
                 .focused($fieldFocused)
@@ -52,48 +54,75 @@ struct DialpadView: View {
         Text(matchedName ?? " ").foregroundStyle(.secondary)
     }
 
+    /// The number in the scheme's voice: light and airy, or heavy for the
+    /// loud one.
+    private var numberFont: Font {
+        switch theme.scheme {
+        case .enamel: .system(size: 30, weight: .light, design: .rounded)
+        case .night: .system(size: 34, weight: .light, design: .rounded)
+        case .vivid: .system(size: 34, weight: .semibold, design: .rounded)
+        }
+    }
+
     private var keypad: some View {
-        Grid(horizontalSpacing: 14, verticalSpacing: 12) {
-            ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
-                GridRow {
-                    ForEach(row, id: \.digit) { key in
-                        DialKey(digit: key.digit, letters: key.letters) {
-                            number.append(key.digit)
+        VStack(spacing: 12) {
+            Grid(horizontalSpacing: 14, verticalSpacing: theme.keyRowSpacing) {
+                ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
+                    GridRow {
+                        ForEach(row, id: \.digit) { key in
+                            DialKey(digit: key.digit, letters: key.letters) {
+                                number.append(key.digit)
+                            }
                         }
                     }
                 }
-            }
-            // Same grid, so the call button sits under 0 and delete under #.
-            GridRow {
-                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-
-                Button(action: dial) {
-                    Image(systemName: "phone.fill")
+                if !theme.usesPills {
+                    // Same grid, so the call button sits under 0 and delete
+                    // under #.
+                    GridRow {
+                        Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                        callAction(Button(action: dial) { Image(systemName: "phone.fill") }
+                            .buttonStyle(CircleButtonStyle(kind: .call, diameter: 58)))
+                        deleteButton.frame(maxWidth: .infinity)
+                    }
+                    .padding(.top, 6)
                 }
-                .buttonStyle(CircleButtonStyle(kind: .call, diameter: 58))
-                .disabled(engine.registration != .registered)
-                .keyboardShortcut(.return, modifiers: [])
-                .help(number.isEmpty ? "Bring back the last number dialed" : "Call")
-                .accessibilityLabel(number.isEmpty ? "Redial" : "Call")
-
-                Button {
-                    if !number.isEmpty { number.removeLast() }
-                } label: {
-                    Image(systemName: "delete.left")
-                        .font(.system(size: 19))
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .opacity(number.isEmpty ? 0 : 1)
-                .disabled(number.isEmpty)
-                .help("Delete")
-                .accessibilityLabel("Delete")
             }
-            .padding(.top, 6)
+            if theme.usesPills {
+                HStack(spacing: 12) {
+                    callAction(Button(action: dial) { Label("Call", systemImage: "phone.fill") }
+                        .buttonStyle(PillButtonStyle(kind: .call)))
+                    deleteButton.frame(width: 52)
+                }
+            }
         }
+    }
+
+    /// What every form of the call button shares.
+    private func callAction(_ button: some View) -> some View {
+        button
+            .disabled(engine.registration != .registered)
+            .keyboardShortcut(.return, modifiers: [])
+            .help(number.isEmpty ? "Bring back the last number dialed" : "Call")
+            .accessibilityLabel(number.isEmpty ? "Redial" : "Call")
+    }
+
+    private var deleteButton: some View {
+        Button {
+            if !number.isEmpty { number.removeLast() }
+        } label: {
+            Image(systemName: "delete.left")
+                .font(.system(size: 19))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 52)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .opacity(number.isEmpty ? 0 : 1)
+        .disabled(number.isEmpty)
+        .help("Delete")
+        .accessibilityLabel("Delete")
     }
 
     /// Who the typed number belongs to, if it is a known contact.
@@ -118,6 +147,7 @@ struct DialpadView: View {
 }
 
 struct DialKey: View {
+    @Environment(\.sippyTheme) private var theme
     let digit: String
     let letters: String?
     let action: () -> Void
@@ -129,9 +159,10 @@ struct DialKey: View {
                     // The text asterisk sits high and small; the symbol is
                     // optically centered.
                     Image(systemName: "asterisk")
-                        .font(.system(size: 17, weight: .medium))
+                        .font(.system(size: bare ? 19 : 17, weight: .medium))
                 } else {
-                    Text(digit).font(.system(size: 24, weight: .regular, design: .rounded))
+                    Text(digit).font(.system(
+                        size: bare ? 28 : 24, weight: bare ? .medium : .regular, design: .rounded))
                 }
                 if let letters {
                     Text(letters)
@@ -142,7 +173,10 @@ struct DialKey: View {
                 }
             }
         }
-        .buttonStyle(DialKeyStyle())
+        .buttonStyle(DialKeyStyle(height: theme.keyHeight))
         .accessibilityLabel(digit)
     }
+
+    /// Without a tile around it the numeral carries the key, so it is larger.
+    private var bare: Bool { theme.keyShape == .bare }
 }

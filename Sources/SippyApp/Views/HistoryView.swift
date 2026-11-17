@@ -21,12 +21,14 @@ struct HistoryView: View {
                         HStack {
                             Spacer()
                             Button("Clear History") { store.clearHistory() }
-                                .buttonStyle(.link)
+                                .buttonStyle(PaneLinkButtonStyle())
                                 .font(.caption)
                         }
                     }
                 }
                 .listStyle(.inset)
+                // The pane shows through; the list brings no background.
+                .scrollContentBackground(.hidden)
             }
         }
     }
@@ -35,6 +37,7 @@ struct HistoryView: View {
 struct HistoryRow: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(AppStore.self) private var store
+    @Environment(\.sippyTheme) private var theme
     let record: CallRecord
 
     private var isMissed: Bool { record.outcome == .missed }
@@ -43,11 +46,11 @@ struct HistoryRow: View {
         HStack(spacing: 10) {
             Image(systemName: record.direction == .incoming ? "phone.arrow.down.left" : "phone.arrow.up.right")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(isMissed ? .red : .secondary)
+                .foregroundStyle(isMissed ? theme.danger : theme.dim)
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 Text(record.displayName)
-                    .foregroundStyle(isMissed ? .red : .primary)
+                    .foregroundStyle(isMissed ? theme.danger : theme.ink)
                     .lineLimit(1)
                     .truncationMode(.middle)
                 Text(subtitle)
@@ -69,6 +72,7 @@ struct HistoryRow: View {
             }
         }
         .padding(.vertical, 2)
+        .sippyListRow()
         .contextMenu {
             Button("Delete", role: .destructive) { store.deleteRecord(record.id) }
         }
