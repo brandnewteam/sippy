@@ -52,6 +52,8 @@ struct RingtoneSettingsTab: View {
             Text(tone.displayName)
             if !tone.isBuiltIn {
                 Text("Imported").font(.caption).foregroundStyle(.secondary)
+            } else if let author = tone.credit?.displayAuthor {
+                Text(author).font(.caption).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer()
             if !tone.isBuiltIn {
@@ -77,6 +79,7 @@ struct RingtoneSettingsTab: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { select(tone) }
+        .help(tone.credit?.summary ?? "")
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 

@@ -23,7 +23,7 @@ import Testing
     @Test func roundTripsAllFields() throws {
         var config = AccountConfig(domain: "pbx", username: "6001")
         config.codecPreferences = [CodecPreference(mime: "G729", clockRate: 8000, enabled: true)]
-        config.ringtone = "Marimba.wav"
+        config.ringtone = "Entropy.wav"
         config.natRewrite = false
         config.stunServer = "stun.example.com"
         config.iceEnabled = true
