@@ -127,36 +127,6 @@ struct CallView: View {
     }
 }
 
-/// Initials in a quiet disc — gives the call screen a focal point without a
-/// photo. Falls back to a person glyph for bare numbers.
-struct Monogram: View {
-    let name: String
-    var diameter: CGFloat = 76
-
-    var body: some View {
-        ZStack {
-            Circle().fill(Color.sippyControlFill())
-            if let initials {
-                Text(initials)
-                    .font(.system(size: diameter * 0.38, weight: .medium, design: .rounded))
-                    .foregroundStyle(.secondary)
-            } else {
-                Image(systemName: "person.fill")
-                    .font(.system(size: diameter * 0.42))
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .frame(width: diameter, height: diameter)
-        .accessibilityHidden(true)
-    }
-
-    private var initials: String? {
-        let words = name.split(whereSeparator: { !$0.isLetter }).prefix(2)
-        guard !words.isEmpty else { return nil }
-        return words.compactMap(\.first).map { String($0).uppercased() }.joined()
-    }
-}
-
 struct RoundActionButton: View {
     let symbol: String
     let kind: CircleButtonStyle.Kind
