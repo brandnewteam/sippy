@@ -1,0 +1,68 @@
+[
+  {
+    "file": "Call me.wav",
+    "title": "Call me",
+    "author": "Anonymous",
+    "year": 2018,
+    "license": "CC0-1.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/Call%20me.ogg",
+    "gain_db": -1.2,
+    "licenseName": "CC0 1.0",
+    "licenseURL": "https://creativecommons.org/publicdomain/zero/1.0/"
+  },
+  {
+    "file": "Entropy.wav",
+    "title": "Entropy",
+    "author": "Mauricio Duarte",
+    "year": 2018,
+    "license": "CC-BY-4.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/Entropy.ogg",
+    "gain_db": 2.9,
+    "licenseName": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  {
+    "file": "Mangoré.wav",
+    "title": "Mangoré",
+    "author": "Mauricio Duarte",
+    "year": 2018,
+    "license": "CC-BY-4.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/Mangor%C3%A9.ogg",
+    "gain_db": 8.7,
+    "licenseName": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  {
+    "file": "Time not Lost.wav",
+    "title": "Time not Lost",
+    "author": "Mauricio Duarte",
+    "year": 2018,
+    "license": "CC-BY-4.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/Time%20not%20Lost.ogg",
+    "gain_db": 4.7,
+    "licenseName": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/"
+  },
+  {
+    "file": "Wooden Drive.wav",
+    "title": "Wooden Drive",
+    "author": "Amber Forest",
+    "year": 2018,
+    "license": "CC-BY-3.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/Wooden%20Drive.ogg",
+    "gain_db": 6.9,
+    "licenseName": "CC BY 3.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/3.0/"
+  },
+  {
+    "file": "sakenointi.wav",
+    "title": "sakenointi",
+    "author": "TMetso",
+    "year": 2018,
+    "license": "CC-BY-4.0",
+    "source": "https://gitlab.com/ubports/development/core/lomiri-sounds/-/raw/81a224fc8a29c06f6b976792014c11b2eb831abb/share/sounds/lomiri/ringtones/sakenointi.ogg",
+    "gain_db": 1.0,
+    "licenseName": "CC BY 4.0",
+    "licenseURL": "https://creativecommons.org/licenses/by/4.0/"
+  }
+]

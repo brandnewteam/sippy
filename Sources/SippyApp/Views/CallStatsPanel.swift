@@ -47,8 +47,10 @@ struct CallStatsPanel: View {
                     .padding(.vertical, 8)
             }
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.4)))
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.sippyControlFill()))
     }
 
     private func statCell(_ label: String, _ value: String) -> some View {

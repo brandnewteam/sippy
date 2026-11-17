@@ -37,36 +37,63 @@ struct HistoryRow: View {
     @Environment(AppStore.self) private var store
     let record: CallRecord
 
+    private var isMissed: Bool { record.outcome == .missed }
+
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: record.direction == .incoming ? "phone.arrow.down.left" : "phone.arrow.up.right")
-                .foregroundStyle(record.outcome == .missed ? .red : .secondary)
-                .frame(width: 18)
-            VStack(alignment: .leading, spacing: 1) {
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(isMissed ? .red : .secondary)
+                .frame(width: 16)
+            VStack(alignment: .leading, spacing: 2) {
                 Text(record.displayName)
-                    .foregroundStyle(record.outcome == .missed ? .red : .primary)
-                HStack(spacing: 4) {
-                    Text(record.number).font(.caption).foregroundStyle(.secondary)
-                    Text("· \(detail)").font(.caption).foregroundStyle(.secondary)
-                }
+                    .foregroundStyle(isMissed ? .red : .primary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
-            Spacer()
-            Text(record.date, format: .relative(presentation: .named))
+            Spacer(minLength: 6)
+            Text(Self.shortDate(record.date))
                 .font(.caption)
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
-            Button {
+                .fixedSize()
+                .help(record.date.formatted(date: .complete, time: .shortened))
+            RowCallButton {
                 // Redial exactly what was dialed before — any prefix is
                 // already baked into the stored number.
                 engine.dial(record.number, origin: .internalContact)
-            } label: {
-                Image(systemName: "phone.fill").foregroundStyle(.green)
             }
-            .buttonStyle(.plain)
-            .disabled(engine.registration != .registered || engine.call != nil)
         }
+        .padding(.vertical, 2)
         .contextMenu {
             Button("Delete", role: .destructive) { store.deleteRecord(record.id) }
         }
+    }
+
+    /// Number and outcome; just the outcome when the caller has no name and
+    /// the title already is the number.
+    private var subtitle: String {
+        record.displayName == record.number ? detail : "\(record.number) · \(detail)"
+    }
+
+    /// Compact date for the narrow window, the way Phone and Mail do it:
+    /// time today, then "Yesterday", the weekday within a week, else the date.
+    static func shortDate(_ date: Date, now: Date = .now, calendar: Calendar = .current) -> String {
+        if calendar.isDate(date, inSameDayAs: now) {
+            return date.formatted(date: .omitted, time: .shortened)
+        }
+        let days = calendar.dateComponents(
+            [.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        if days == 1 { return "Yesterday" }
+        if (2..<7).contains(days) { return date.formatted(.dateTime.weekday(.wide)) }
+        if calendar.isDate(date, equalTo: now, toGranularity: .year) {
+            return date.formatted(.dateTime.day().month(.abbreviated))
+        }
+        return date.formatted(.dateTime.day().month(.abbreviated).year())
     }
 
     private var detail: String {

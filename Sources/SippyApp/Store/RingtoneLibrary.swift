@@ -5,12 +5,31 @@ import Observation
 /// The ringtones Sippy can ring with: the bundled set (app Resources, with a
 /// repo fallback for `swift run`) plus user-imported files in
 /// `~/Library/Application Support/Sippy/Ringtones`.
+///
+/// The bundled set is third-party work under CC0 / CC BY (see
+/// `Support/Ringtones/CREDITS.md`, written by `Tools/fetch_ringtones.py`
+/// together with the `credits.json` read here).
 @MainActor
 @Observable
 final class RingtoneLibrary {
+    /// Author and license of a bundled ringtone, from `credits.json`.
+    struct Credit: Equatable, Decodable {
+        let file: String
+        let author: String
+        let licenseName: String
+
+        /// nil for anonymous work: there is no name to show.
+        var displayAuthor: String? { author == "Anonymous" ? nil : author }
+
+        var summary: String {
+            displayAuthor.map { "By \($0), \(licenseName)" } ?? licenseName
+        }
+    }
+
     struct Ringtone: Identifiable, Equatable {
         let url: URL
         let isBuiltIn: Bool
+        var credit: Credit?
         var id: String { url.path }
         /// Filename including extension — the stable key stored in the
         /// account config (so the library can move without invalidating it).
@@ -48,10 +67,24 @@ final class RingtoneLibrary {
     func reload() {
         var found: [Ringtone] = []
         if let builtIn = Self.builtInDirectory {
-            found += list(directory: builtIn, builtIn: true)
+            let credits = Self.credits(in: builtIn)
+            found += list(directory: builtIn, builtIn: true).map { tone in
+                var tone = tone
+                tone.credit = credits[tone.fileName]
+                return tone
+            }
         }
         found += list(directory: Self.userDirectory, builtIn: false)
         ringtones = found
+    }
+
+    /// Credits by filename; empty when the file is missing or unreadable
+    /// (the ringtones still work, they just show no author).
+    private static func credits(in directory: URL) -> [String: Credit] {
+        guard let data = try? Data(contentsOf: directory.appendingPathComponent("credits.json")),
+              let credits = try? JSONDecoder().decode([Credit].self, from: data)
+        else { return [:] }
+        return Dictionary(credits.map { ($0.file, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     private func list(directory: URL, builtIn: Bool) -> [Ringtone] {
@@ -59,7 +92,10 @@ final class RingtoneLibrary {
             at: directory, includingPropertiesForKeys: nil)) ?? []
         return contents
             .filter { Self.importableExtensions.contains($0.pathExtension.lowercased()) }
-            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .sorted {
+                $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent)
+                    == .orderedAscending
+            }
             .map { Ringtone(url: $0, isBuiltIn: builtIn) }
     }
 
@@ -105,13 +141,16 @@ final class RingtoneLibrary {
         }
         stopPreview()
         guard let player = try? AVAudioPlayer(contentsOf: ringtone.url) else { return }
-        player.numberOfLoops = 1
+        // A short ring pattern plays twice so the loop can be judged; a
+        // tune of its own length plays once.
+        let plays: Double = player.duration < 12 ? 2 : 1
+        player.numberOfLoops = Int(plays) - 1
         player.play()
         previewPlayer = player
         previewingID = ringtone.id
         // Clear the state when the (finite) preview runs out.
         let id = ringtone.id
-        DispatchQueue.main.asyncAfter(deadline: .now() + player.duration * 2 + 0.1) { [weak self] in
+        DispatchQueue.main.asyncAfter(deadline: .now() + player.duration * plays + 0.1) { [weak self] in
             MainActor.assumeIsolated {
                 guard let self, self.previewingID == id, self.previewPlayer?.isPlaying != true
                 else { return }

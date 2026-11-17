@@ -3,73 +3,115 @@ import SippyCore
 
 struct DialpadView: View {
     @Environment(SIPEngine.self) private var engine
-    @ViewState private var number = ""
+    @Environment(AppStore.self) private var store
+    @Binding var number: String
     @FocusState private var fieldFocused: Bool
 
-    /// nil label means the key has no letters row.
-    private static let keys: [(digit: String, letters: String?)] = [
-        ("1", ""), ("2", "ABC"), ("3", "DEF"),
-        ("4", "GHI"), ("5", "JKL"), ("6", "MNO"),
-        ("7", "PQRS"), ("8", "TUV"), ("9", "WXYZ"),
-        ("*", nil), ("0", "+"), ("#", nil),
+    /// nil letters means the key has no letters row.
+    private static let rows: [[(digit: String, letters: String?)]] = [
+        [("1", ""), ("2", "ABC"), ("3", "DEF")],
+        [("4", "GHI"), ("5", "JKL"), ("6", "MNO")],
+        [("7", "PQRS"), ("8", "TUV"), ("9", "WXYZ")],
+        [("*", nil), ("0", "+"), ("#", nil)],
     ]
 
     var body: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 0) {
+            Spacer(minLength: 8)
+            display
+            Spacer(minLength: 12)
+            keypad
+        }
+        // The keypad stays anchored to the bottom, where the hand expects
+        // it; a taller window only gives the number more air.
+        .padding(.bottom, 20)
+        .padding(.horizontal, SippyLayout.mainPadding)
+        .onAppear { fieldFocused = true }
+    }
+
+    private var display: some View {
+        VStack(spacing: 2) {
             TextField("Number", text: $number)
                 .textFieldStyle(.plain)
-                .font(.system(size: 26, weight: .light, design: .monospaced))
+                .font(.system(size: 30, weight: .light, design: .rounded))
+                .monospacedDigit()
                 .multilineTextAlignment(.center)
                 .focused($fieldFocused)
                 .onSubmit(dial)
-                .padding(.top, 16)
+            // Always there, even when blank: the keypad must not jump when
+            // the line appears.
+            hintLine
+                .font(.callout)
+                .lineLimit(1)
+                .frame(height: 18)
+        }
+    }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.fixed(64), spacing: 14), count: 3), spacing: 12) {
-                ForEach(Self.keys, id: \.digit) { key in
-                    DialKey(digit: key.digit, letters: key.letters) {
-                        number.append(key.digit)
+    /// Under the number: whose number it is.
+    private var hintLine: Text {
+        Text(matchedName ?? " ").foregroundStyle(.secondary)
+    }
+
+    private var keypad: some View {
+        Grid(horizontalSpacing: 14, verticalSpacing: 12) {
+            ForEach(Array(Self.rows.enumerated()), id: \.offset) { _, row in
+                GridRow {
+                    ForEach(row, id: \.digit) { key in
+                        DialKey(digit: key.digit, letters: key.letters) {
+                            number.append(key.digit)
+                        }
                     }
                 }
             }
+            // Same grid, so the call button sits under 0 and delete under #.
+            GridRow {
+                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
 
-            HStack(spacing: 20) {
+                Button(action: dial) {
+                    Image(systemName: "phone.fill")
+                }
+                .buttonStyle(CircleButtonStyle(kind: .call, diameter: 58))
+                .disabled(engine.registration != .registered)
+                .keyboardShortcut(.return, modifiers: [])
+                .help(number.isEmpty ? "Bring back the last number dialed" : "Call")
+                .accessibilityLabel(number.isEmpty ? "Redial" : "Call")
+
                 Button {
                     if !number.isEmpty { number.removeLast() }
                 } label: {
                     Image(systemName: "delete.left")
-                        .font(.title3)
-                        .frame(width: 40, height: 40)
+                        .font(.system(size: 19))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .opacity(number.isEmpty ? 0 : 1)
                 .disabled(number.isEmpty)
-
-                Button(action: dial) {
-                    Image(systemName: "phone.fill")
-                        .font(.title2)
-                        .foregroundStyle(.white)
-                        .frame(width: 56, height: 56)
-                        .background(Circle().fill(canDial ? .green : .gray))
-                }
-                .buttonStyle(.plain)
-                .disabled(!canDial)
-                .keyboardShortcut(.return, modifiers: [])
+                .help("Delete")
+                .accessibilityLabel("Delete")
             }
-
-            if let error = engine.lastCallError {
-                Text(error).font(.caption).foregroundStyle(.red)
-            }
-            Spacer(minLength: 8)
+            .padding(.top, 6)
         }
-        .padding(.horizontal, 20)
-        .onAppear { fieldFocused = true }
     }
 
-    private var canDial: Bool {
-        !number.isEmpty && engine.registration == .registered
+    /// Who the typed number belongs to, if it is a known contact.
+    private var matchedName: String? {
+        guard !number.isEmpty else { return nil }
+        return engine.displayNameResolver?(number)
     }
 
+    /// With a number: call it. Without one the call button works like a
+    /// phone's redial — it brings back the last number dialed, ready to call.
     private func dial() {
-        guard canDial else { return }
+        guard engine.registration == .registered else { return }
+        guard !number.isEmpty else {
+            if let last = store.records.first(where: { $0.direction == .outgoing }) {
+                number = last.number
+            }
+            return
+        }
         engine.dial(number, origin: .dialpad)
         number = ""
     }
@@ -82,15 +124,25 @@ struct DialKey: View {
 
     var body: some View {
         Button(action: action) {
-            VStack(spacing: 1) {
-                Text(digit).font(.system(size: 22, weight: .regular))
+            VStack(spacing: 0) {
+                if digit == "*" {
+                    // The text asterisk sits high and small; the symbol is
+                    // optically centered.
+                    Image(systemName: "asterisk")
+                        .font(.system(size: 17, weight: .medium))
+                } else {
+                    Text(digit).font(.system(size: 24, weight: .regular, design: .rounded))
+                }
                 if let letters {
-                    Text(letters).font(.system(size: 9)).foregroundStyle(.secondary)
+                    Text(letters)
+                        .font(.system(size: 9, weight: .medium))
+                        .tracking(1)
+                        .foregroundStyle(.secondary)
+                        .frame(height: 11)
                 }
             }
-            .frame(width: 64, height: 48)
-            .background(RoundedRectangle(cornerRadius: 10).fill(.quaternary.opacity(0.5)))
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DialKeyStyle())
+        .accessibilityLabel(digit)
     }
 }
