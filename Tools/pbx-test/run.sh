@@ -5,13 +5,20 @@
 #
 #   Tools/pbx-test/run.sh
 #
+# Built with extra SwiftPM flags (make build SWIFTPM_FLAGS=…)? Pass the same
+# SWIFTPM_FLAGS here so the spike is looked up where that build put it.
+#
 # Exits non-zero on any failed step.
 
 set -eu
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$DIR/../.." && pwd)"
-SPIKE="$REPO/.build/arm64-apple-macosx/debug/sippy-spike"
+# The products dir depends on SwiftPM's build system; ask it with the same
+# flags as the build (see Makefile). SWIFTPM_FLAGS is split into words on
+# purpose, like make does.
+# shellcheck disable=SC2086
+SPIKE="$(cd "$REPO" && swift build ${SWIFTPM_FLAGS:-} --show-bin-path 2>/dev/null || true)/sippy-spike"
 IMAGE=sippy-pbx-test
 CONTAINER=sippy-pbx-test
 LOG="${TMPDIR:-/tmp}/sippy-pbx-test.log"

@@ -17,6 +17,13 @@
 #     dir; Testing's sits in plugins/testing/, so @Test/@Suite fail with
 #     "plugin for module 'TestingMacros' not found". `make test` loads it
 #     explicitly. Full Xcode (e.g. on CI) doesn't need this.
+#
+# Build products aren't at a fixed path: SwiftPM 6.4's default build system
+# (swiftbuild) writes them to .build/out/Products/<Config>, the older native
+# one to .build/<triple>/<config>, and a tree used by both keeps a stale copy
+# of the other. BUILD_DIR/DEPS_BUILD_DIR therefore come from
+# `swift build --show-bin-path`, run with the same flags as the build
+# (SWIFTPM_FLAGS, e.g. SWIFTPM_FLAGS="--build-system native").
 
 CLT := /Library/Developer/CommandLineTools
 TESTING_MACROS := $(CLT)/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib
@@ -28,10 +35,18 @@ endif
 
 # CONFIG=release for optimized builds (make app CONFIG=release, make release).
 CONFIG ?= debug
-BUILD_DIR := .build/arm64-apple-macosx/$(CONFIG)
+# Extra flags for every swift build/test; also used to locate the products.
+SWIFTPM_FLAGS ?=
+
+# SwiftPM's bin dir for a config (relative to the repo when inside it).
+# Fails loudly rather than letting recipes run with an empty path.
+bin_path = $(patsubst $(CURDIR)/%,%,$(or $(shell swift build -c $(1) $(SWIFTPM_FLAGS) \
+    --show-bin-path 2>/dev/null),$(error `swift build -c $(1) --show-bin-path` failed)))
+# Evaluated once, on first use (most targets never need them).
+BUILD_DIR = $(eval BUILD_DIR := $(call bin_path,$(CONFIG)))$(BUILD_DIR)
 # deps artifacts are config-independent; always built against the debug
 # frameworks (which `swift build` fetches first).
-DEPS_BUILD_DIR := .build/arm64-apple-macosx/debug
+DEPS_BUILD_DIR = $(eval DEPS_BUILD_DIR := $(call bin_path,debug))$(DEPS_BUILD_DIR)
 CHECKOUTS := .build/checkouts-manual
 HIDAPI := Vendor/lib/libhidapi.0.dylib
 MSBCG729 := Vendor/lib/libmsbcg729.so
@@ -62,11 +77,11 @@ NOTARY_PROFILE ?= sippy
 .PHONY: build test spike-codecs deps app run-app release notarize clean
 
 build: deps
-	swift build -c $(CONFIG)
+	swift build -c $(CONFIG) $(SWIFTPM_FLAGS)
 	cp -f $(HIDAPI) $(BUILD_DIR)/
 
 test:
-	swift test --filter SippyCoreTests $(TEST_FLAGS)
+	swift test --filter SippyCoreTests $(SWIFTPM_FLAGS) $(TEST_FLAGS)
 
 spike-codecs: build
 	$(BUILD_DIR)/sippy-spike codecs
@@ -84,11 +99,11 @@ $(HIDAPI):
 	    -compatibility_version 0 -current_version 0.15.0 \
 	    -o $(HIDAPI)
 
-# Needs the SDK frameworks (headers) in $(BUILD_DIR) — `swift build` fetches
-# them, hence the bootstrap build without the plugin present.
+# Needs the SDK frameworks (headers) in $(DEPS_BUILD_DIR) — `swift build`
+# fetches them, hence the bootstrap build without the plugin present.
 $(MSBCG729):
 	mkdir -p Vendor/lib $(CHECKOUTS)
-	test -d $(DEPS_BUILD_DIR)/mediastreamer2.framework || swift build
+	test -d $(DEPS_BUILD_DIR)/mediastreamer2.framework || swift build $(SWIFTPM_FLAGS)
 	test -d $(CHECKOUTS)/bcg729 || git clone --depth 1 \
 	    https://github.com/BelledonneCommunications/bcg729.git $(CHECKOUTS)/bcg729
 	clang -dynamiclib -O2 \
@@ -101,7 +116,9 @@ $(MSBCG729):
 
 # Assembles a runnable Sippy.app without Xcode: SPM binary + SDK frameworks +
 # our plugin dylibs + Info.plist, ad-hoc signed. The extra rpath makes the
-# bundle self-contained; the SPM build-dir rpath stays for dev convenience.
+# bundle self-contained; SwiftPM's own rpaths (@loader_path, and with
+# swiftbuild an absolute $(BUILD_DIR)/PackageFrameworks that stays empty for
+# this package) stay for running the bare binary from $(BUILD_DIR).
 # macOS 26 masks app icons into its squircle itself, but only fully opaque
 # full-bleed artwork qualifies. Zoom-crop any rounded master to full bleed
 # so the system can apply its own rounding.
