@@ -47,15 +47,9 @@ struct DialpadView: View {
         }
     }
 
-    /// Under the number: whose number it is, or why the last call failed.
+    /// Under the number: whose number it is.
     private var hintLine: Text {
-        if let name = matchedName {
-            Text(name).foregroundStyle(.secondary)
-        } else if number.isEmpty, let error = engine.lastCallError {
-            Text(error).foregroundStyle(.red)
-        } else {
-            Text(" ")
-        }
+        Text(matchedName ?? " ").foregroundStyle(.secondary)
     }
 
     private var keypad: some View {

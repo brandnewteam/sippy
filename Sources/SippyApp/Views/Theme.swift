@@ -247,7 +247,9 @@ struct RegistrationStatusLabel: View {
 ///
 /// Explanations go in section footers, never in rows. Tabs that fit are
 /// sized to their content (`height: nil`) and the window follows; long ones
-/// get a fixed height and scroll.
+/// get a fixed height and scroll. `height: nil` disables scrolling, so a tab
+/// whose content can grow without limit must switch to a height before it
+/// outgrows the screen.
 ///
 /// `form: false` takes the content as is, inset like a form section — for
 /// the one thing a grouped form can't hold, a drag-reorderable list.

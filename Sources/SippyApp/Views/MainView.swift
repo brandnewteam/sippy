@@ -48,6 +48,12 @@ struct MainView: View {
                 .padding(.bottom, 10)
             }
             Divider()
+            // Why the last call failed. Here rather than in one tab: a call
+            // placed from Contacts or History comes back to that tab.
+            if engine.call == nil, let error = engine.lastCallError {
+                CallErrorBanner(message: error) { engine.clearLastCallError() }
+                Divider()
+            }
             // One surface for every screen: the lists bring their own text
             // background, so the dialpad and the call screen sit on it too.
             Group {
@@ -66,6 +72,47 @@ struct MainView: View {
             Divider()
             RegistrationStatusBar()
         }
+    }
+}
+
+/// The failure reason of the last call, until dismissed or the next call.
+/// SIP reasons can be long ("SIP 480 Temporarily Unavailable — Reason: …"),
+/// so it wraps instead of truncating.
+struct CallErrorBanner: View {
+    let message: String
+    let dismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .foregroundStyle(.red)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("Call failed").fontWeight(.medium)
+                Text(message)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+            .font(.callout)
+            Spacer(minLength: 4)
+            Button(action: dismiss) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Dismiss")
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.leading, 12)
+        .padding(.trailing, 6)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.red.opacity(0.08))
+        .help(message)
     }
 }
 

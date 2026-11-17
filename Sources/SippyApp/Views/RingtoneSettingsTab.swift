@@ -8,8 +8,13 @@ struct RingtoneSettingsTab: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(RingtoneLibrary.self) private var ringtones
 
+    /// Rows the tab shows at its natural height. Imports are unlimited, so
+    /// past this the tab gets a fixed height and scrolls instead of growing
+    /// off the screen.
+    private static let fittedRowLimit = 8
+
     var body: some View {
-        SettingsPane {
+        SettingsPane(height: ringtones.ringtones.count > Self.fittedRowLimit ? 560 : nil) {
             Section("Ringtone") {
                 ForEach(ringtones.ringtones) { tone in
                     row(for: tone)

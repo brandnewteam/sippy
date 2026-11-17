@@ -291,6 +291,12 @@ public final class SIPEngine {
     }
 
     /// Dials a complete SIP URI verbatim (no dial-plan rewriting).
+    /// Dismisses the last call's failure reason (the main window shows it
+    /// until then, or until the next call).
+    public func clearLastCallError() {
+        lastCallError = nil
+    }
+
     public func dialURI(_ uri: String) {
         guard let core, call == nil else { return }
         lastCallError = nil
