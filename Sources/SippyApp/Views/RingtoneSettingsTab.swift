@@ -9,32 +9,25 @@ struct RingtoneSettingsTab: View {
     @Environment(RingtoneLibrary.self) private var ringtones
 
     var body: some View {
-        VStack(spacing: 0) {
-            List {
-                Section("Ringtone") {
-                    ForEach(ringtones.ringtones) { tone in
-                        row(for: tone)
-                    }
+        SettingsPane {
+            Section("Ringtone") {
+                ForEach(ringtones.ringtones) { tone in
+                    row(for: tone)
                 }
             }
-            Divider()
-            VStack(spacing: 8) {
+            Section {
                 Picker("Ring on", selection: Binding(
                     get: { engine.selectedRingerDevice ?? "" },
                     set: { engine.setRingerDevice($0) }
                 )) {
                     ForEach(engine.ringerDevices, id: \.self) { Text($0).tag($0) }
                 }
-                .help("Ring can go to speakers while calls use the headset.")
-                HStack {
-                    Text("Imported files are copied into Sippy's library.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button("Import…") { importRingtone() }
-                }
+            } footer: {
+                SettingsFootnote("The ring can go to the speakers while calls use the headset.")
             }
-            .padding(10)
+        } bar: {
+            SettingsBarNote("Imported files are copied into Sippy's library.")
+            Button("Import…") { importRingtone() }
         }
         .onAppear { engine.refreshRingerDevices() }
     }
@@ -44,35 +37,42 @@ struct RingtoneSettingsTab: View {
     }
 
     private func row(for tone: RingtoneLibrary.Ringtone) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: tone.fileName == selectedFileName ? "checkmark.circle.fill" : "circle")
-                .foregroundStyle(tone.fileName == selectedFileName ? Color.accentColor : .secondary)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(tone.displayName)
-                if !tone.isBuiltIn {
-                    Text("Imported").font(.caption2).foregroundStyle(.secondary)
-                }
+        let isSelected = tone.fileName == selectedFileName
+        return HStack(spacing: 8) {
+            Image(systemName: "checkmark")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Color.accentColor)
+                .opacity(isSelected ? 1 : 0)
+                .frame(width: 16)
+            Text(tone.displayName)
+            if !tone.isBuiltIn {
+                Text("Imported").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button {
-                ringtones.togglePreview(tone)
-            } label: {
-                Image(systemName: ringtones.previewingID == tone.id ? "stop.fill" : "play.fill")
-            }
-            .buttonStyle(.borderless)
-            .help("Preview")
             if !tone.isBuiltIn {
                 Button {
                     delete(tone)
                 } label: {
                     Image(systemName: "trash")
+                        .frame(width: 20, height: 20)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
                 .help("Delete imported ringtone")
             }
+            Button {
+                ringtones.togglePreview(tone)
+            } label: {
+                Image(systemName: ringtones.previewingID == tone.id ? "stop.fill" : "play.fill")
+                    .frame(width: 20, height: 20)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help("Preview")
         }
         .contentShape(Rectangle())
         .onTapGesture { select(tone) }
+        .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 
     private func select(_ tone: RingtoneLibrary.Ringtone) {

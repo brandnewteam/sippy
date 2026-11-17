@@ -31,13 +31,12 @@ struct SettingsView: View {
             RingtoneSettingsTab()
                 .tabItem { Label("Ringtones", systemImage: "bell") }
         }
-        .frame(width: 440, height: 520)
         .onAppear(perform: loadOnce)
         .onDisappear { ringtones.stopPreview() }
     }
 
     private var accountTab: some View {
-        Form {
+        SettingsPane(height: 540) {
             Section("SIP Account") {
                 TextField("Domain", text: $domain, prompt: Text("pbx.example.com"))
                 TextField("Username", text: $username)
@@ -48,62 +47,67 @@ struct SettingsView: View {
                     }
                 }
             }
-            Section("Dialing") {
+            Section {
                 TextField("Outside line prefix", text: $outsidePrefix, prompt: Text("e.g. 0 or 0*4"))
                 TextField("Replace leading + with", text: $internationalPrefix, prompt: Text("e.g. 00 (empty keeps +)"))
-                Text("The prefix applies to numbers from links and system contacts. The dialpad and Sippy contacts dial verbatim.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Dialing")
+            } footer: {
+                SettingsFootnote("The prefix applies to numbers from links and system contacts. The dialpad and Sippy contacts dial verbatim.")
             }
-            Section("NAT traversal") {
+            Section {
                 Toggle("Update IP address from server replies", isOn: $natRewrite)
                 TextField("STUN server", text: $stunServer, prompt: Text("stun.example.com (optional)"))
                 Toggle("Use ICE", isOn: $iceEnabled)
                     .disabled(stunServer.trimmingCharacters(in: .whitespaces).isEmpty)
-                Text("Leave as-is when the PBX rewrites addresses server-side (Kalliope can).")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("NAT Traversal")
+            } footer: {
+                SettingsFootnote("Leave as-is when the PBX rewrites addresses server-side (Kalliope can).")
             }
-            Section("Connection") {
+            Section {
                 Toggle("Register only while a route to the server exists", isOn: $requireRoute)
-                Text("For servers reached over a VPN: don't attempt to connect while the VPN is down, and reconnect as soon as it comes up.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            } header: {
+                Text("Connection")
+            } footer: {
+                SettingsFootnote("For servers reached over a VPN: don't attempt to connect while the VPN is down, and reconnect as soon as it comes up.")
             }
-            HStack {
-                Spacer()
-                Button("Apply") { apply() }
-                    .keyboardShortcut(.defaultAction)
-            }
+        } bar: {
+            RegistrationStatusLabel()
+            Spacer(minLength: 0)
+            Button("Apply") { apply() }
+                .keyboardShortcut(.defaultAction)
         }
-        .formStyle(.grouped)
-        .padding(.bottom, 8)
     }
 
     private var audioTab: some View {
         @Bindable var engine = engine
-        return Form {
-            Picker("Microphone", selection: Binding(
-                get: { engine.selectedInputID ?? "" },
-                set: { engine.selectInputDevice(id: $0) }
-            )) {
-                ForEach(engine.inputDevices) { Text($0.name).tag($0.id) }
-            }
-            Picker("Output", selection: Binding(
-                get: { engine.selectedOutputID ?? "" },
-                set: { engine.selectOutputDevice(id: $0) }
-            )) {
-                ForEach(engine.outputDevices) { Text($0.name).tag($0.id) }
+        return SettingsPane {
+            Section {
+                Picker("Microphone", selection: Binding(
+                    get: { engine.selectedInputID ?? "" },
+                    set: { engine.selectInputDevice(id: $0) }
+                )) {
+                    ForEach(engine.inputDevices) { Text($0.name).tag($0.id) }
+                }
+                Picker("Output", selection: Binding(
+                    get: { engine.selectedOutputID ?? "" },
+                    set: { engine.selectOutputDevice(id: $0) }
+                )) {
+                    ForEach(engine.outputDevices) { Text($0.name).tag($0.id) }
+                }
+            } footer: {
+                SettingsFootnote("Used for calls. The device that rings is set in Ringtones.")
             }
         }
-        .formStyle(.grouped)
         .onAppear { engine.refreshAudioDevices() }
     }
 
     /// Order = priority; changes apply immediately (they only take effect on
     /// the next call anyway).
     private var codecsTab: some View {
-        VStack(spacing: 0) {
+        // A List, not a form section: grouped forms don't support onMove.
+        SettingsPane(height: 480, form: false) {
             List {
                 ForEach(engine.codecPreferences) { pref in
                     HStack(spacing: 10) {
@@ -121,6 +125,7 @@ struct SettingsView: View {
                         Image(systemName: "line.3.horizontal")
                             .foregroundStyle(.tertiary)
                     }
+                    .padding(.vertical, 2)
                     .opacity(pref.enabled ? 1 : 0.5)
                 }
                 .onMove { from, to in
@@ -129,15 +134,10 @@ struct SettingsView: View {
                     engine.setCodecPreferences(codecs)
                 }
             }
-            Divider()
-            HStack {
-                Text("Drag to set priority. First enabled codec is offered first.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Button("Reset to Defaults") { engine.resetCodecPreferencesToDefaults() }
-            }
-            .padding(10)
+            .listStyle(.bordered)
+        } bar: {
+            SettingsBarNote("Drag to set priority. The first enabled codec is offered first.")
+            Button("Reset to Defaults") { engine.resetCodecPreferencesToDefaults() }
         }
     }
 

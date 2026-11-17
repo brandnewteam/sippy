@@ -8,22 +8,12 @@ struct GeneralSettingsTab: View {
     @ViewState private var loginItemError: String?
 
     var body: some View {
-        Form {
+        SettingsPane {
             Section {
                 Toggle("Start Sippy at login", isOn: $launchAtLogin)
                     .onChange(of: launchAtLogin) { _, enabled in
                         setLaunchAtLogin(enabled)
                     }
-                if let loginItemError {
-                    Text(loginItemError)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-                Text("A phone should be reachable — start at login and keep Sippy in the menu bar to take calls without any window open.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            Section {
                 Picker("Show Sippy in", selection: Binding(
                     get: { AppPresence(rawValue: presenceRaw) ?? .dockAndMenuBar },
                     set: { presence in
@@ -33,15 +23,18 @@ struct GeneralSettingsTab: View {
                 )) {
                     ForEach(AppPresence.allCases) { Text($0.label).tag($0) }
                 }
-                .pickerStyle(.radioGroup)
-                if AppPresence(rawValue: presenceRaw) == .menuBarOnly {
-                    Text("Without a Dock icon, use the menu bar phone icon to open Sippy.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+            } footer: {
+                SettingsFootnote {
+                    if let loginItemError {
+                        Text(loginItemError).foregroundStyle(.red)
+                    }
+                    Text("A phone should be reachable — start at login and keep Sippy in the menu bar to take calls without any window open.")
+                    if AppPresence(rawValue: presenceRaw) == .menuBarOnly {
+                        Text("Without a Dock icon, use the menu bar phone icon to open Sippy.")
+                    }
                 }
             }
         }
-        .formStyle(.grouped)
         .onAppear {
             // The user can also flip the login item in System Settings.
             launchAtLogin = SMAppService.mainApp.status == .enabled

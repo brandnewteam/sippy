@@ -12,30 +12,50 @@ struct ContactsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                TextField("Search", text: $search)
-                    .textFieldStyle(.roundedBorder)
+            HStack(spacing: 8) {
+                HStack(spacing: 5) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    TextField("Search", text: $search)
+                        .textFieldStyle(.plain)
+                }
+                .padding(.horizontal, 8)
+                .frame(height: 28)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.sippyControlFill()))
+
                 Button {
                     creating = true
                 } label: {
                     Image(systemName: "plus")
+                        .frame(width: 28, height: 28)
+                        .contentShape(Rectangle())
                 }
+                .buttonStyle(.borderless)
                 .help("New Sippy contact")
+                .accessibilityLabel("New Sippy contact")
             }
-            .padding(10)
+            .padding(.leading, 12)
+            .padding(.trailing, 6)
+            .padding(.vertical, 8)
 
-            List {
-                let sippyMatches = filteredContacts
-                if !sippyMatches.isEmpty {
-                    Section("Sippy") {
-                        ForEach(sippyMatches) { contact in
-                            SippyContactRow(contact: contact) { editing = contact }
+            if hasNoMatches {
+                ContentUnavailableView.search(text: search)
+            } else {
+                List {
+                    let sippyMatches = filteredContacts
+                    if !sippyMatches.isEmpty {
+                        Section("Sippy") {
+                            ForEach(sippyMatches) { contact in
+                                SippyContactRow(contact: contact) { editing = contact }
+                            }
                         }
                     }
+                    systemSection
                 }
-                systemSection
+                .listStyle(.inset)
             }
-            .listStyle(.inset)
         }
         .sheet(isPresented: $creating) {
             ContactEditor(contact: nil)
@@ -44,6 +64,12 @@ struct ContactsView: View {
             ContactEditor(contact: contact)
         }
         .onAppear { systemContacts.loadIfAuthorized() }
+    }
+
+    /// A search that finds nothing in either source.
+    private var hasNoMatches: Bool {
+        !search.isEmpty && filteredContacts.isEmpty
+            && (systemContacts.access != .authorized || filteredSystemEntries.isEmpty)
     }
 
     private var filteredContacts: [SippyContact] {
@@ -114,12 +140,7 @@ struct SippyContactRow: View {
                 if contact.isFavorite {
                     Image(systemName: "star.fill").foregroundStyle(.yellow).font(.caption)
                 }
-                VStack(alignment: .leading) {
-                    Text(contact.name)
-                    if !contact.company.isEmpty {
-                        Text(contact.company).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
+                ContactLabel(name: contact.name, company: contact.company)
             }
         }
         .contextMenu {
@@ -145,37 +166,46 @@ struct SystemContactRow: View {
                 }
             }
         } label: {
-            VStack(alignment: .leading) {
-                Text(entry.name)
-                if !entry.company.isEmpty {
-                    Text(entry.company).font(.caption).foregroundStyle(.secondary)
-                }
-            }
+            ContactLabel(name: entry.name, company: entry.company)
         }
     }
 }
 
+/// Name over company, shared by Sippy and address book rows.
+struct ContactLabel: View {
+    let name: String
+    let company: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(name).lineLimit(1)
+            if !company.isEmpty {
+                Text(company).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+}
+
 struct NumberRow: View {
-    @Environment(SIPEngine.self) private var engine
     let label: String
     let value: String
     let dial: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 8) {
             Text(label.isEmpty ? "phone" : label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .frame(width: 70, alignment: .leading)
-            Text(value).textSelection(.enabled)
-            Spacer()
-            Button {
-                dial()
-            } label: {
-                Image(systemName: "phone.fill").foregroundStyle(.green)
-            }
-            .buttonStyle(.plain)
-            .disabled(engine.registration != .registered || engine.call != nil)
+                .lineLimit(1)
+                .frame(width: 62, alignment: .leading)
+            Text(value)
+                .monospacedDigit()
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+            Spacer(minLength: 4)
+            RowCallButton(action: dial)
         }
     }
 }
@@ -197,10 +227,10 @@ struct ContactEditor: View {
                 Toggle("Favorite", isOn: $draft.isFavorite)
                 Section("Numbers") {
                     ForEach($draft.numbers) { $number in
-                        HStack {
-                            TextField("Label", text: $number.label)
-                                .frame(width: 110)
-                            TextField("Number or extension", text: $number.value)
+                        HStack(spacing: 8) {
+                            TextField("Label", text: $number.label, prompt: Text("Label"))
+                                .frame(width: 84)
+                            TextField("Number", text: $number.value, prompt: Text("Number or extension"))
                             Button {
                                 draft.numbers.removeAll { $0.id == number.id }
                             } label: {
@@ -208,7 +238,9 @@ struct ContactEditor: View {
                             }
                             .buttonStyle(.plain)
                             .disabled(draft.numbers.count == 1)
+                            .help("Remove number")
                         }
+                        .labelsHidden()
                     }
                     Button("Add Number") {
                         draft.numbers.append(ContactNumber(label: "work", value: ""))
@@ -221,16 +253,20 @@ struct ContactEditor: View {
             }
             .formStyle(.grouped)
 
+            Divider()
             HStack {
-                Button("Cancel") { dismiss() }
                 Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
                 Button("Save") { save() }
                     .keyboardShortcut(.defaultAction)
                     .disabled(draft.name.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .padding(12)
+            .padding(.horizontal, 20)
+            .padding(.vertical, 12)
         }
-        .frame(width: 380, height: 440)
+        // As wide as the window it drops from.
+        .frame(width: SippyLayout.mainWidth, height: 460)
         .onAppear(perform: loadOnce)
     }
 

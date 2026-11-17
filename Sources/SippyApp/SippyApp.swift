@@ -41,9 +41,9 @@ struct SippyApp: App {
                         appDelegate.engine.handle(request)
                     }
                 }
-                .frame(minWidth: 260, minHeight: 440)
         }
         .windowResizability(.contentSize)
+        .defaultSize(width: SippyLayout.mainWidth, height: SippyLayout.mainIdealHeight)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { appDelegate.checkForUpdates(nil) }
