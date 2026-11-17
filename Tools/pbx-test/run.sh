@@ -11,7 +11,8 @@ set -eu
 
 DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(cd "$DIR/../.." && pwd)"
-SPIKE="$REPO/.build/arm64-apple-macosx/debug/sippy-spike"
+# The products dir depends on SwiftPM's build system; ask it (see Makefile).
+SPIKE="$(cd "$REPO" && swift build --show-bin-path 2>/dev/null || true)/sippy-spike"
 IMAGE=sippy-pbx-test
 CONTAINER=sippy-pbx-test
 LOG="${TMPDIR:-/tmp}/sippy-pbx-test.log"

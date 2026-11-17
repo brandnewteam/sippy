@@ -33,11 +33,14 @@ make run-app
 
 ```sh
 make build
-.build/arm64-apple-macosx/debug/sippy-spike codecs         # list codecs
-.build/arm64-apple-macosx/debug/sippy-spike register
-.build/arm64-apple-macosx/debug/sippy-spike call 124
-.build/arm64-apple-macosx/debug/sippy-spike receive        # wait for calls
+bin=$(swift build --show-bin-path)   # where SwiftPM put the products
+$bin/sippy-spike codecs              # list codecs
+$bin/sippy-spike register
+$bin/sippy-spike call 124
+$bin/sippy-spike receive             # wait for calls
 ```
+
+The products directory depends on the SwiftPM build system: `.build/out/Products/Debug` with SwiftPM 6.4's default (swiftbuild), `.build/arm64-apple-macosx/debug` with the older native one. The Makefile asks `swift build --show-bin-path` rather than assuming either; pass `SWIFTPM_FLAGS` (e.g. `SWIFTPM_FLAGS="--build-system native"`) to build and locate products with different SwiftPM flags.
 
 Credentials come from `SIPPY_DOMAIN`, `SIPPY_USER`, `SIPPY_PASSWORD` (or a local `.env`, see `.env.example`; real environment wins). Useful extras: `SIPPY_DEBUG=1` full SIP traces, `SIPPY_TRANSPORT=tcp|tls`, `SIPPY_CODECS=G729` to restrict offered codecs, `SIPPY_AUTOANSWER=<secs>` for `receive`.
 
