@@ -15,11 +15,6 @@ struct RingtoneSettingsTab: View {
 
     var body: some View {
         SettingsPane(height: ringtones.ringtones.count > Self.fittedRowLimit ? 560 : nil) {
-            Section("Ringtone") {
-                ForEach(ringtones.ringtones) { tone in
-                    row(for: tone)
-                }
-            }
             Section {
                 Picker("Ring on", selection: Binding(
                     get: { engine.selectedRingerDevice ?? "" },
@@ -29,6 +24,11 @@ struct RingtoneSettingsTab: View {
                 }
             } footer: {
                 SettingsFootnote("The ring can go to the speakers while calls use the headset.")
+            }
+            Section("Ringtone") {
+                ForEach(ringtones.ringtones) { tone in
+                    row(for: tone)
+                }
             }
         } bar: {
             SettingsBarNote("Imported files are copied into Sippy's library.")
