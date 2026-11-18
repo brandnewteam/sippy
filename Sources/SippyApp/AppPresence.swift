@@ -27,8 +27,8 @@ enum AppPresence: String, CaseIterable, Identifiable {
             .flatMap(AppPresence.init(rawValue:)) ?? .dockAndMenuBar
     }
 
-    /// Persists and applies the Dock half; the menu bar half is SwiftUI's
-    /// `MenuBarExtra(isInserted:)` reading `showsMenuBarExtra`.
+    /// Persists and applies the Dock half; the menu bar half is
+    /// `StatusItemController`, which follows `showsMenuBarExtra`.
     func apply() {
         // Only touch defaults on a real change: a same-value write still
         // notifies @AppStorage and can re-trigger the scene update that

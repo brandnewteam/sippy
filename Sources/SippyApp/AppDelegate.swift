@@ -17,6 +17,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sparkle auto-updates. Nil when Info.plist has no SUFeedURL (a bare
     /// `swift run`, or a fork without a feed) — see README "Sparkle updates".
     private(set) var updates: UpdateController?
+    private var statusItem: StatusItemController?
 
     var updatesConfigured: Bool { updates != nil }
 
@@ -27,7 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if UpdateController.isConfigured {
             updates = UpdateController(engine: engine, notifier: notifier)
         }
-        MenuBarClicks.install()
+        statusItem = StatusItemController(
+            engine: engine, store: store,
+            checkForUpdates: updates.map { updates in { updates.checkForUpdates() } })
         engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
         systemContacts.loadIfAuthorized()
@@ -77,6 +80,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             self?.updates?.callFinished()
         }
+    }
+
+    /// A softphone keeps running (and taking calls) with every window closed.
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
