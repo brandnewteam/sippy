@@ -103,9 +103,15 @@ jobs:
           security create-keychain -p "$kc_password" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$kc_password" "$keychain"
+          echo "Importing Developer ID certificate"
           security import "$RUNNER_TEMP/developer-id.p12" -k "$keychain" \
             -P "$P12_PASSWORD" -f pkcs12 -T /usr/bin/codesign
-          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain"
+          # The runner image may already carry the intermediate, and then
+          # security refuses the duplicate; a missing chain still fails the
+          # valid-identity check below.
+          echo "Importing Developer ID G2 intermediate"
+          security import "$RUNNER_TEMP/DeveloperIDG2CA.cer" -k "$keychain" ||
+            echo "Intermediate not imported (already present on the runner?)"
           security set-key-partition-list -S apple-tool:,apple:,codesign: \
             -s -k "$kc_password" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" \
