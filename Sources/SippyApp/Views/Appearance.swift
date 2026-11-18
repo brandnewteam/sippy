@@ -382,6 +382,7 @@ final class WindowChromeProbe: NSView {
         if let window, !window.titlebarAccessoryViewControllers.contains(accessory) {
             window.addTitlebarAccessoryViewController(accessory)
         }
+        if let window { MainWindow.window = window }
         apply()
     }
 

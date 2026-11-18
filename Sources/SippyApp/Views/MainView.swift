@@ -28,6 +28,7 @@ extension MainTab {
 struct MainView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @AppStorage(SippyScheme.defaultsKey) private var schemeRaw = SippyScheme.enamel.rawValue
     @AppStorage(SippyMode.defaultsKey) private var modeRaw = SippyMode.dark.rawValue
     @AppStorage(SippyNavigation.defaultsKey) private var navigationRaw = SippyNavigation.top.rawValue
@@ -87,6 +88,8 @@ struct MainView: View {
                 .environment(\.sippyTheme, theme)
                 .environment(engine)
         })
+        // For the call notification, when the menu bar extra is off.
+        .onAppear { MainWindow.opener = openWindow }
     }
 
     private var content: some View {
