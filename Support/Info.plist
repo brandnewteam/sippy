@@ -4,22 +4,36 @@
 <dict>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
-	<key>CFBundleDisplayName</key>
-	<string>Sippy</string>
 	<key>CFBundleExecutable</key>
 	<string>Sippy</string>
-	<key>CFBundleIconFile</key>
-	<string>AppIcon.icns</string>
 	<key>CFBundleIdentifier</key>
 	<string>sm.3dprint.Sippy</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
 	<string>Sippy</string>
+	<key>CFBundleDisplayName</key>
+	<string>Sippy</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon.icns</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>0.3.1</string>
+	<key>CFBundleVersion</key>
+	<string>5</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Sippy needs the microphone for phone calls.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Sippy can show your address book contacts and use them for caller ID.</string>
+	<key>NSHumanReadableCopyright</key>
+	<string>AGPLv3</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -34,20 +48,6 @@
 			</array>
 		</dict>
 	</array>
-	<key>CFBundleVersion</key>
-	<string>5</string>
-	<key>LSApplicationCategoryType</key>
-	<string>public.app-category.productivity</string>
-	<key>LSMinimumSystemVersion</key>
-	<string>14.0</string>
-	<key>NSContactsUsageDescription</key>
-	<string>Sippy can show your address book contacts and use them for caller ID.</string>
-	<key>NSHighResolutionCapable</key>
-	<true/>
-	<key>NSHumanReadableCopyright</key>
-	<string>AGPLv3</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>Sippy needs the microphone for phone calls.</string>
 	<key>NSServices</key>
 	<array>
 		<dict>
