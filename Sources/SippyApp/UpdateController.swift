@@ -27,7 +27,16 @@ final class UpdateController: NSObject {
         notifier.onShowUpdate = { [weak self] in self?.checkForUpdates() }
     }
 
+    /// The build has an update feed (a bare `swift run` doesn't).
+    static var isConfigured: Bool {
+        (Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String)?.isEmpty == false
+    }
+
+    /// Always on request (a menu item or the reminder notification), so it
+    /// brings Sippy forward: from the menu bar, Sparkle's window would
+    /// otherwise open behind the app you are in.
     func checkForUpdates() {
+        NSApp.activate(ignoringOtherApps: true)
         controller.checkForUpdates(nil)
     }
 

@@ -79,7 +79,8 @@ struct SippyApp: App {
         // Registration status + quick dial while the main window is closed
         // (the engine keeps running window-less since M3).
         MenuBarExtra(isInserted: menuBarInserted) {
-            MenuBarView()
+            MenuBarView(checkForUpdates: UpdateController.isConfigured
+                        ? { appDelegate.checkForUpdates(nil) } : nil)
                 .environment(appDelegate.engine)
                 .environment(appDelegate.store)
         } label: {

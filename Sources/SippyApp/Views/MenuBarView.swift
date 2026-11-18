@@ -27,9 +27,32 @@ struct MenuBarIcon: View {
     }
 }
 
+/// Left click on the menu bar icon opens Sippy; right click (or Control-
+/// click) opens the menu. SwiftUI's MenuBarExtra opens its menu on any
+/// click, so a local event monitor takes the plain left click first. The
+/// icon is the app's only window at the status bar level.
+@MainActor
+enum MenuBarClicks {
+    private static var monitor: Any?
+
+    static func install() {
+        guard monitor == nil else { return }
+        monitor = NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+            guard event.window?.level == .statusBar,
+                  !event.modifierFlags.contains(.control)
+            else { return event }
+            MainActor.assumeIsolated { MainWindow.show(activating: true) }
+            return nil
+        }
+    }
+}
+
 /// Contents of the menu bar extra: registration state, current-call quick
 /// actions, favorite-contact speed dial, and window/quit plumbing.
 struct MenuBarView: View {
+    /// Nil when the build has no update feed.
+    var checkForUpdates: (() -> Void)?
+
     @Environment(SIPEngine.self) private var engine
     @Environment(AppStore.self) private var store
     @Environment(\.openWindow) private var openWindow
@@ -70,6 +93,11 @@ struct MenuBarView: View {
             // window it opened landed behind the app you were in.
             Button("Settings…") { showSettings() }
                 .keyboardShortcut(",")
+            // The only way to check by hand when Sippy lives in the menu bar
+            // alone (no app menu to reach).
+            if let checkForUpdates {
+                Button("Check for Updates…") { checkForUpdates() }
+            }
             Divider()
             Button("Quit Sippy") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
