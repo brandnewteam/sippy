@@ -6,6 +6,7 @@ import SippyCore
 /// sparklines over the whole call.
 struct CallStatsPanel: View {
     @Environment(SIPEngine.self) private var engine
+    @Environment(\.sippyTheme) private var theme
 
     var body: some View {
         let history = engine.statsHistory
@@ -28,17 +29,17 @@ struct CallStatsPanel: View {
                     title: "Bandwidth",
                     value: String(format: "↓ %.0f  ↑ %.0f kbit/s", last.downloadKbps, last.uploadKbps),
                     series: [
-                        (history.map { $0.downloadKbps }, Color.blue),
-                        (history.map { $0.uploadKbps }, Color.green),
+                        (history.map { $0.downloadKbps }, theme.accent),
+                        (history.map { $0.uploadKbps }, theme.dim),
                     ])
                 sparklineRow(
                     title: "Jitter",
                     value: String(format: "%.1f ms", last.downloadJitterMs),
-                    series: [(history.map { $0.downloadJitterMs }, Color.orange)])
+                    series: [(history.map { $0.downloadJitterMs }, theme.warning)])
                 sparklineRow(
                     title: "Loss",
                     value: String(format: "%.1f %%", last.downloadLossPct),
-                    series: [(history.map { $0.downloadLossPct }, Color.red)])
+                    series: [(history.map { $0.downloadLossPct }, theme.danger)])
             } else {
                 Text("Waiting for media statistics…")
                     .font(.caption)
@@ -50,7 +51,7 @@ struct CallStatsPanel: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(Color.sippyControlFill()))
+                .fill(theme.controlFill))
     }
 
     private func statCell(_ label: String, _ value: String) -> some View {

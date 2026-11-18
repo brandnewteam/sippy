@@ -53,6 +53,7 @@ struct ContactsView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(AppStore.self) private var store
     @Environment(SystemContactsIndex.self) private var systemContacts
+    @Environment(\.sippyTheme) private var theme
 
     @ViewState private var search = ""
     @ViewState private var expanded: Set<String> = []
@@ -117,16 +118,17 @@ struct ContactsView: View {
             .frame(height: 28)
             .background(
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.sippyControlFill()))
+                    .fill(theme.controlFill))
 
             Button {
                 creating = true
             } label: {
                 Image(systemName: "plus")
+                    .foregroundStyle(.secondary)
                     .frame(width: 28, height: 28)
                     .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .help("New Sippy contact")
             .accessibilityLabel("New Sippy contact")
         }
@@ -144,12 +146,12 @@ struct ContactsView: View {
             let others = sippy.filter { $0.sippy?.isFavorite != true }
 
             if !favorites.isEmpty {
-                Section("Favorites") { rows(favorites) }
+                section("Favorites") { rows(favorites) }
             }
             if !others.isEmpty {
-                Section("Sippy") { rows(others) }
+                section("Sippy") { rows(others) }
             } else if store.contacts.isEmpty {
-                Section("Sippy") {
+                section("Sippy") {
                     SourceNote(
                         text: "Extensions and internal numbers live here. They are dialed exactly as written.",
                         action: "New Contact…"
@@ -159,6 +161,24 @@ struct ContactsView: View {
             systemSection
         }
         .listStyle(.inset)
+        // The pane shows through; the list brings no background.
+        .scrollContentBackground(.hidden)
+    }
+
+    /// A titled group of rows. The title is a row of its own rather than a
+    /// section header: headers pin to the top over a system material, a
+    /// gray band across the pane.
+    private func section(_ title: String, @ViewBuilder content: () -> some View) -> some View {
+        Section {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 6)
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .accessibilityAddTraits(.isHeader)
+            content()
+        }
     }
 
     private func rows(_ items: [ContactItem]) -> some View {
@@ -188,17 +208,17 @@ struct ContactsView: View {
         case .authorized:
             let matches = systemItems
             if !matches.isEmpty {
-                Section("Address Book") { rows(matches) }
+                section("Address Book") { rows(matches) }
             }
         case .undetermined:
-            Section("Address Book") {
+            section("Address Book") {
                 SourceNote(
                     text: "Search and call the people in Contacts, and see their names when they call.",
                     action: "Show Address Book…"
                 ) { systemContacts.requestAccess() }
             }
         case .denied:
-            Section("Address Book") {
+            section("Address Book") {
                 SourceNote(
                     text: "Sippy has no access to Contacts. Allow it in System Settings › Privacy & Security › Contacts.",
                     action: "Open Privacy Settings…"
@@ -299,6 +319,7 @@ struct ContactRow: View {
             }
         }
         .onHover { hovering = $0 }
+        .sippyListRow()
         .contextMenu { contextMenu }
     }
 
@@ -416,9 +437,10 @@ struct SourceNote: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             Button(action, action: perform)
-                .buttonStyle(.link)
+                .buttonStyle(PaneLinkButtonStyle())
         }
         .padding(.vertical, 4)
+        .sippyListRow()
     }
 }
 

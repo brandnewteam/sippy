@@ -1,9 +1,13 @@
 import ServiceManagement
 import SwiftUI
 
-/// Settings → General: login item and where the app shows itself.
+/// Settings → General: login item, where the app shows itself, and how the
+/// main window looks.
 struct GeneralSettingsTab: View {
     @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
+    @AppStorage(SippyScheme.defaultsKey) private var scheme = SippyScheme.enamel
+    @AppStorage(SippyMode.defaultsKey) private var mode = SippyMode.dark
+    @AppStorage(SippyNavigation.defaultsKey) private var navigation = SippyNavigation.top
     @ViewState private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @ViewState private var loginItemError: String?
 
@@ -33,6 +37,21 @@ struct GeneralSettingsTab: View {
                         Text("Without a Dock icon, use the menu bar phone icon to open Sippy.")
                     }
                 }
+            }
+            Section {
+                Picker("Color scheme", selection: $scheme) {
+                    ForEach(SippyScheme.allCases) { Text($0.label).tag($0) }
+                }
+                Picker("Appearance", selection: $mode) {
+                    ForEach(SippyMode.allCases) { Text($0.label).tag($0) }
+                }
+                Picker("Navigation", selection: $navigation) {
+                    ForEach(SippyNavigation.allCases) { Text($0.label).tag($0) }
+                }
+            } header: {
+                Text("Main Window")
+            } footer: {
+                SettingsFootnote("The registration status takes the end of the window the navigation leaves free.")
             }
         }
         .onAppear {
