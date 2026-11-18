@@ -7,6 +7,10 @@
 //       (optional SIPPY_TRANSPORT=udp|tcp|tls, default udp).
 //   sippy-spike call <number-or-sip-uri>
 //       Register, then place a call. Ctrl-C to hang up.
+//   sippy-spike devices
+//       List every audio device the stack sees (extendedAudioDevices: the
+//       plain audioDevices keeps only the first of each type), with the
+//       current and default ones.
 
 import Foundation
 import linphonesw
@@ -92,7 +96,7 @@ func runLoop(_ core: Core) -> Never {
 
 let arguments = CommandLine.arguments.dropFirst()
 guard let command = arguments.first else {
-    fputs("usage: sippy-spike codecs | register | call <number-or-sip-uri>\n", stderr)
+    fputs("usage: sippy-spike codecs | devices | register | call <number-or-sip-uri>\n", stderr)
     exit(2)
 }
 
@@ -118,6 +122,24 @@ if let filter = env("SIPPY_CODECS") {
 switch command {
 case "codecs":
     listCodecs(core)
+
+case "devices":
+    try core.start()
+    func describe(_ device: AudioDevice?) -> String {
+        guard let device else { return "nil" }
+        return "\(device.id) [\(device.driverName)]"
+    }
+    for device in core.extendedAudioDevices {
+        let caps = [
+            device.hasCapability(capability: .CapabilityRecord) ? "record" : nil,
+            device.hasCapability(capability: .CapabilityPlay) ? "play" : nil,
+        ].compactMap { $0 }.joined(separator: "+")
+        print("\(device.id) | name=\(device.deviceName) | driver=\(device.driverName) | type=\(device.type) | \(caps)")
+    }
+    print("input:          \(describe(core.inputAudioDevice))")
+    print("output:         \(describe(core.outputAudioDevice))")
+    print("default input:  \(describe(core.defaultInputAudioDevice))")
+    print("default output: \(describe(core.defaultOutputAudioDevice))")
 
 case "register":
     try setUpAccount(core)

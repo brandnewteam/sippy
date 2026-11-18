@@ -108,6 +108,8 @@ public final class SIPEngine {
 
     private static let sipTraceKey = "sippy.sipTraceEnabled"
     private static let ringerDeviceKey = "sippy.ringerDevice"
+    private static let inputDeviceKey = "sippy.inputDevice"
+    private static let outputDeviceKey = "sippy.outputDevice"
     private static let statsHistoryLimit = 600
     private static let sipTraceLimit = 500
 
@@ -164,6 +166,7 @@ public final class SIPEngine {
             iterateTimer = timer
 
             refreshAudioDevices()
+            applyStoredAudioDevices()
             refreshRingerDevices()
             if let stored = UserDefaults.standard.string(forKey: Self.ringerDeviceKey) {
                 setRingerDevice(stored)
@@ -340,31 +343,69 @@ public final class SIPEngine {
 
     // MARK: - Audio devices
 
+    /// Lists every device: `core.audioDevices` keeps only the first device
+    /// of each type, which hid e.g. a second set of speakers, a USB DAC or
+    /// AirPods next to the built-in ones.
     public func refreshAudioDevices() {
         guard let core else { return }
-        let devices = core.audioDevices
-        inputDevices = devices
-            .filter { $0.hasCapability(capability: .CapabilityRecord) }
-            .map { AudioDeviceInfo(id: $0.id, name: $0.deviceName, isInput: true) }
-        outputDevices = devices
-            .filter { $0.hasCapability(capability: .CapabilityPlay) }
-            .map { AudioDeviceInfo(id: $0.id, name: $0.deviceName, isInput: false) }
-        selectedInputID = core.inputAudioDevice?.id ?? core.defaultInputAudioDevice?.id
-        selectedOutputID = core.outputAudioDevice?.id ?? core.defaultOutputAudioDevice?.id
+        let devices = core.extendedAudioDevices
+        inputDevices = Self.deviceInfos(
+            devices.filter { $0.hasCapability(capability: .CapabilityRecord) }, isInput: true)
+        outputDevices = Self.deviceInfos(
+            devices.filter { $0.hasCapability(capability: .CapabilityPlay) }, isInput: false)
+        selectedInputID = core.defaultInputAudioDevice?.id
+        selectedOutputID = core.defaultOutputAudioDevice?.id
     }
 
+    private static func deviceInfos(_ devices: [AudioDevice], isInput: Bool) -> [AudioDeviceInfo] {
+        let names = AudioDeviceNames.displayNames(for: devices.map(\.deviceName))
+        return zip(devices, names).map { AudioDeviceInfo(id: $0.id, name: $1, isInput: isInput) }
+    }
+
+    /// The choice is persisted and re-applied across launches and hot-plugs.
     public func selectInputDevice(id: String) {
-        guard let core, let device = core.audioDevices.first(where: { $0.id == id }) else { return }
-        core.inputAudioDevice = device
-        activeCall?.inputAudioDevice = device
-        selectedInputID = id
+        guard applyInputDevice(id: id) else { return }
+        UserDefaults.standard.set(id, forKey: Self.inputDeviceKey)
     }
 
     public func selectOutputDevice(id: String) {
-        guard let core, let device = core.audioDevices.first(where: { $0.id == id }) else { return }
-        core.outputAudioDevice = device
+        guard applyOutputDevice(id: id) else { return }
+        UserDefaults.standard.set(id, forKey: Self.outputDeviceKey)
+    }
+
+    /// The core's *default* device is the one for the next calls; its plain
+    /// input/outputAudioDevice only switches calls already in progress (and
+    /// does nothing without one), so a choice made in Settings between calls
+    /// used to be lost.
+    @discardableResult
+    private func applyInputDevice(id: String) -> Bool {
+        guard let core, let device = core.extendedAudioDevices.first(where: { $0.id == id })
+        else { return false }
+        core.defaultInputAudioDevice = device
+        activeCall?.inputAudioDevice = device
+        selectedInputID = id
+        return true
+    }
+
+    @discardableResult
+    private func applyOutputDevice(id: String) -> Bool {
+        guard let core, let device = core.extendedAudioDevices.first(where: { $0.id == id })
+        else { return false }
+        core.defaultOutputAudioDevice = device
         activeCall?.outputAudioDevice = device
         selectedOutputID = id
+        return true
+    }
+
+    /// A stored device that isn't plugged in stays the preference: the
+    /// system default plays meanwhile, and it's picked again when it returns.
+    private func applyStoredAudioDevices() {
+        if let id = UserDefaults.standard.string(forKey: Self.inputDeviceKey), id != selectedInputID {
+            applyInputDevice(id: id)
+        }
+        if let id = UserDefaults.standard.string(forKey: Self.outputDeviceKey), id != selectedOutputID {
+            applyOutputDevice(id: id)
+        }
     }
 
     // MARK: - Ringtone & ringer device
@@ -663,6 +704,7 @@ public final class SIPEngine {
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     self.refreshAudioDevices()
+                    self.applyStoredAudioDevices()
                     self.refreshRingerDevices()
                     // Re-pin the preferred ringer if it just got plugged back in.
                     if let preferred = UserDefaults.standard.string(forKey: Self.ringerDeviceKey),
