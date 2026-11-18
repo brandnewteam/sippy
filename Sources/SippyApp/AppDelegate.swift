@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let store = AppStore()
     let systemContacts = SystemContactsIndex()
     let ringtones = RingtoneLibrary()
+    private(set) lazy var notifier = CallNotifier(engine: engine)
 
     /// Sparkle auto-updates. Dormant (nil) until an SUFeedURL is configured
     /// in Info.plist — see README "Sparkle updates".
@@ -28,6 +29,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         AppPresence.current.apply()
         wireUp()
+        notifier.start()
         engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
         systemContacts.loadIfAuthorized()
@@ -40,6 +42,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func wireUp() {
         let store = store
         let systemContacts = systemContacts
+        let notifier = notifier
 
         engine.displayNameResolver = { number in
             if let name = store.contactName(forNumber: number) { return name }
@@ -71,6 +74,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 durationSeconds: duration,
                 outcome: outcome,
                 codec: finished.codec))
+            if outcome == .missed {
+                notifier.postMissedCall(display: finished.remoteDisplay, number: finished.remoteNumber)
+            }
         }
     }
 

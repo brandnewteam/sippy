@@ -28,9 +28,11 @@ extension MainTab {
 struct MainView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.openWindow) private var openWindow
     @AppStorage(SippyScheme.defaultsKey) private var schemeRaw = SippyScheme.enamel.rawValue
     @AppStorage(SippyMode.defaultsKey) private var modeRaw = SippyMode.dark.rawValue
     @AppStorage(SippyNavigation.defaultsKey) private var navigationRaw = SippyNavigation.top.rawValue
+    @AppStorage(MainWindowFloat.defaultsKey) private var floatsOnTop = false
     // Both live here rather than in the tabs so they survive a call (the
     // call screen replaces the tabs) and switching between tabs.
     @ViewState private var tab: MainTab = .dialpad
@@ -79,13 +81,15 @@ struct MainView: View {
         // back; always with a definite answer, because a window released
         // back to "no preference" keeps the last one.
         .preferredColorScheme(colorScheme)
-        .background(WindowChrome(metrics: $chrome) {
+        .background(WindowChrome(metrics: $chrome, floats: floatsOnTop) {
             // A hosting view of its own: it gets none of our environment.
             titlebar
                 .foregroundStyle(theme.ink, theme.dim, theme.faint)
                 .environment(\.sippyTheme, theme)
                 .environment(engine)
         })
+        // For the call notification, when the menu bar extra is off.
+        .onAppear { MainWindow.opener = openWindow }
     }
 
     private var content: some View {

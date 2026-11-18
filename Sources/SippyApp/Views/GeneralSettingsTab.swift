@@ -1,3 +1,4 @@
+import AppKit
 import ServiceManagement
 import SwiftUI
 
@@ -10,6 +11,7 @@ struct GeneralSettingsTab: View {
     @AppStorage(SippyNavigation.defaultsKey) private var navigation = SippyNavigation.top
     @ViewState private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @ViewState private var loginItemError: String?
+    @ViewState private var notificationStyle = CallNotificationStyle.unknown
 
     var body: some View {
         SettingsPane {
@@ -39,6 +41,19 @@ struct GeneralSettingsTab: View {
                 }
             }
             Section {
+                LabeledContent("Notifications") {
+                    HStack {
+                        Text(notificationStyle.label)
+                            .foregroundStyle(.secondary)
+                        Button("Change…") { CallNotificationStyle.openSystemSettings() }
+                    }
+                }
+            } header: {
+                Text("Incoming Calls")
+            } footer: {
+                SettingsFootnote(notificationStyle.footnote)
+            }
+            Section {
                 Picker("Color scheme", selection: $scheme) {
                     ForEach(SippyScheme.allCases) { Text($0.label).tag($0) }
                 }
@@ -57,6 +72,11 @@ struct GeneralSettingsTab: View {
         .onAppear {
             // The user can also flip the login item in System Settings.
             launchAtLogin = SMAppService.mainApp.status == .enabled
+        }
+        // The style is changed in System Settings: re-read it on return.
+        .task { notificationStyle = await CallNotificationStyle.current() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { notificationStyle = await CallNotificationStyle.current() }
         }
     }
 

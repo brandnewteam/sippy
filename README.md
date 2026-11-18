@@ -6,13 +6,13 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 
 ## Features
 
-- **Calling** — dialpad, mute/hold, DTMF, audio device selection, call history with redial, incoming/outgoing call UI.
+- **Calling** — dialpad, mute/hold, DTMF, audio device selection, call history with redial, incoming/outgoing call UI; incoming calls come as a notification with Answer and Decline (never a window stealing focus), and missed calls leave one.
 - **Contacts** — Sippy's own store for PBX extensions (favorites, multiple numbers) merged with the system address book; caller-ID resolution checks both.
 - **Origin-aware dial plan** — numbers arriving from outside the app (`tel:`/`callto:`/`sip:` links, the "Call with Sippy" Services menu entry, paste-and-dial ⇧⌘V) and from system contacts get your outside-line prefix (`0`, `0*4`, …); the dialpad and Sippy contacts dial verbatim.
 - **Codecs** — reorderable per-codec priority list, defaults Opus → G.722 → G.711 → G.729. G.729 works even though the prebuilt linphone SDK omits it (see Vendored pieces).
 - **Inspector** — per-call live stats (codec, encryption, ICE, RTT, jitter, loss, bandwidth sparklines) and a SIP Log window (⇧⌘L) with message capture, filtering, offered-vs-answered SDP codec view, and export.
 - **Ringtones** — six bundled ringtones from Ubuntu Touch's [lomiri-sounds](https://gitlab.com/ubports/development/core/lomiri-sounds) (CC0 and CC BY, credited in [`Support/Ringtones/CREDITS.md`](Support/Ringtones/CREDITS.md); `Tools/fetch_ringtones.py` re-fetches and converts them), custom import, and ring-device routing (ring on speakers, talk on headset).
-- **At home on macOS** — menu bar extra with quick answer/hang-up and favorites speed-dial, start at login, Dock/menu-bar presence choice, re-registration on network change and wake.
+- **At home on macOS** — menu bar extra with quick answer/hang-up and favorites speed-dial, start at login, Dock/menu-bar presence choice, Window › Float on Top, re-registration on network change and wake.
 - **Themes** — the main window is a single coloured pane taken from the app icon: three schemes (Enamel, Night Signal, Vivid), each dark or light or following the system, with the Dialpad / Contacts / History tabs in the title bar or as a bottom tab bar (Settings › General).
 - **NAT traversal** — received/rport IP rewrite toggle, optional STUN/ICE.
 - **VPN-aware registration** (opt-in) — register only while a route to the server exists. For PBXes reached over a VPN: no timeout noise while the tunnel is down, instant re-register when it comes up. Private server addresses need a specific (VPN-pushed or LAN) route; the catch-all default route doesn't count.

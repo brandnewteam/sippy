@@ -6,6 +6,7 @@ import SippyCore
 struct SippyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
+    @AppStorage(MainWindowFloat.defaultsKey) private var floatsOnTop = false
 
     /// Two-way: Settings drives it via AppStorage, and if the user removes
     /// the extra some other way we fall back to Dock-only so the app never
@@ -61,6 +62,10 @@ struct SippyApp: App {
                     }
                 }
                 .keyboardShortcut("v", modifiers: [.command, .shift])
+            }
+            // Under Minimize and Zoom; a checkmark shows when it is on.
+            CommandGroup(after: .windowSize) {
+                Toggle("Float on Top", isOn: $floatsOnTop)
             }
         }
 

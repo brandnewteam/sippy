@@ -318,19 +318,27 @@ struct WindowChromeMetrics: Equatable {
     var trailing: CGFloat = 8
 }
 
+/// Window › Float on Top: keeps the main window above other apps' windows.
+enum MainWindowFloat {
+    static let defaultsKey = "sippy.window.floatOnTop"
+}
+
 /// Sits invisibly in the main window to do what SwiftUI has no modifier
 /// for: put `titlebar` beside the traffic lights, measure the title bar the
-/// content draws under, and let the pane move the window.
+/// content draws under, let the pane move the window, and float it on top
+/// (`.windowLevel` needs macOS 15).
 ///
 /// The controls have to live in the title bar proper (an accessory), not in
 /// the content underneath it: the title bar is transparent here, but it
 /// still takes every click in its strip.
 struct WindowChrome<Titlebar: View>: NSViewRepresentable {
     @Binding var metrics: WindowChromeMetrics
+    var floats = false
     @ViewBuilder var titlebar: Titlebar
 
     func makeNSView(context: Context) -> WindowChromeProbe {
         let view = WindowChromeProbe()
+        view.floats = floats
         view.report = { measured in
             if metrics != measured { metrics = measured }
         }
@@ -339,6 +347,7 @@ struct WindowChrome<Titlebar: View>: NSViewRepresentable {
 
     func updateNSView(_ view: WindowChromeProbe, context: Context) {
         view.host.rootView = AnyView(titlebar)
+        view.floats = floats
         view.apply()
     }
 }
@@ -346,6 +355,7 @@ struct WindowChrome<Titlebar: View>: NSViewRepresentable {
 final class WindowChromeProbe: NSView {
     let host = NSHostingView(rootView: AnyView(EmptyView()))
     var report: ((WindowChromeMetrics) -> Void)?
+    var floats = false
     private let accessory = NSTitlebarAccessoryViewController()
 
     override init(frame: NSRect) {
@@ -372,6 +382,7 @@ final class WindowChromeProbe: NSView {
         if let window, !window.titlebarAccessoryViewControllers.contains(accessory) {
             window.addTitlebarAccessoryViewController(accessory)
         }
+        if let window { MainWindow.window = window }
         apply()
     }
 
@@ -380,6 +391,8 @@ final class WindowChromeProbe: NSView {
         window.titlebarSeparatorStyle = .none
         // One pane, no chrome: any spot without a control moves the window.
         window.isMovableByWindowBackground = true
+        let level: NSWindow.Level = floats ? .floating : .normal
+        if window.level != level { window.level = level }
 
         var measured = WindowChromeMetrics()
         measured.titlebarHeight = max(window.frame.height - window.contentLayoutRect.height, 28)

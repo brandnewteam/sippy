@@ -6,9 +6,13 @@ import SippyCore
 /// computed string in the App) so Observation reliably re-renders it.
 struct MenuBarIcon: View {
     @Environment(SIPEngine.self) private var engine
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Image(systemName: symbol)
+            // Lives as long as the menu bar extra, so the notifier can
+            // reopen a closed main window.
+            .onAppear { MainWindow.opener = openWindow }
     }
 
     private var symbol: String {
@@ -29,6 +33,7 @@ struct MenuBarView: View {
     @Environment(SIPEngine.self) private var engine
     @Environment(AppStore.self) private var store
     @Environment(\.openWindow) private var openWindow
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         Group {
@@ -61,7 +66,10 @@ struct MenuBarView: View {
             Divider()
             Button("Open Sippy") { showMainWindow() }
                 .keyboardShortcut("o")
-            SettingsLink { Text("Settings…") }
+            // Not a SettingsLink: the menu leaves Sippy inactive, so the
+            // window it opened landed behind the app you were in.
+            Button("Settings…") { showSettings() }
+                .keyboardShortcut(",")
             Divider()
             Button("Quit Sippy") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
@@ -90,5 +98,17 @@ struct MenuBarView: View {
     private func showMainWindow() {
         openWindow(id: "main")
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func showSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
+        // Menu-bar-only (accessory) apps can activate without fronting the
+        // window just opened; once it exists, put it in front by name.
+        DispatchQueue.main.async {
+            NSApp.windows
+                .first { $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window" }?
+                .makeKeyAndOrderFront(nil)
+        }
     }
 }
