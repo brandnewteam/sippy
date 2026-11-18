@@ -65,7 +65,7 @@ The version comes from `CFBundleShortVersionString` in `Support/Info.plist`.
 
 ### CI
 
-`.github/workflows/build.yml` runs on a GitHub macOS runner with full Xcode. On every pull request it runs `make test` and `make release`, then uploads the ad-hoc signed zip as a workflow artifact (kept 14 days) so the PR can be tried without a local toolchain. Publishing a GitHub release builds the same way but signs with the Developer ID certificate, notarizes and staples, then attaches `Sippy-<version>.zip` to the release; the tag (`v0.1.0` or `0.1.0`) must match the Info.plist version. It can also be started by hand from the Actions tab, ticking "sign" for a signed and notarized build without a release.
+`.github/workflows/build.yml` runs on a GitHub macOS runner with full Xcode. On every pull request it runs `make test` and `make release`, then uploads the ad-hoc signed zip as a workflow artifact (kept 14 days) so the PR can be tried without a local toolchain. Publishing a GitHub release builds the same way but signs with the Developer ID certificate, notarizes and staples, then attaches `Sippy-<version>.zip` and the Sparkle `appcast.xml` to the release; the tag (`v0.1.0` or `0.1.0`) must match the Info.plist version. It can also be started by hand from the Actions tab, ticking "sign" for a signed and notarized build without a release.
 
 PR builds are ad-hoc signed, so macOS quarantines them after download: after unzipping, clear the flag with `xattr -dr com.apple.quarantine Sippy.app` (or right-click → Open). Release builds open normally.
 
@@ -80,12 +80,25 @@ The signing secrets live in a GitHub environment named `release` (Settings → E
 | `NOTARY_API_KEY` | Contents of the App Store Connect API key file (`AuthKey_XXXXXXXXXX.p8`) |
 | `NOTARY_API_KEY_ID` | That key's Key ID |
 | `NOTARY_API_ISSUER_ID` | The Issuer ID shown above the keys list in App Store Connect |
+| `SPARKLE_ED_PRIVATE_KEY` | The Sparkle update signing key, see [Sparkle updates](#sparkle-updates) |
 
 The job imports the certificate into a throwaway keychain, picks the Developer ID identity from it, and deletes the keychain at the end.
 
 ### Sparkle updates
 
-The app bundles [Sparkle](https://sparkle-project.org) and shows "Check for Updates…" in the app menu once a feed is configured. To enable updates: generate EdDSA keys with Sparkle's `generate_keys`, put the public key in `SUPublicEDKey` and the appcast URL in `SUFeedURL` (both in `Support/Info.plist`), and publish release zips plus an `appcast.xml` (GitHub Releases works well). With `SUFeedURL` empty the updater stays dormant.
+The app updates itself with [Sparkle](https://sparkle-project.org). `SUFeedURL` in `Support/Info.plist` points at `releases/latest/download/appcast.xml`, which GitHub redirects to the `appcast.xml` attached to the newest release; every published release attaches one, written by `Tools/make_appcast.sh` on CI. It holds a single item (the release's zip, its EdDSA signature, the release notes rendered to HTML), since installed copies only need the newest version.
+
+Updates never take focus on their own: when a daily check finds a new version, Sippy posts a notification instead of opening Sparkle's window, and clicking the notification (or Check for Updates… in the app menu) opens it. Relaunching into an installed update waits until no call is in progress. See `Sources/SippyApp/UpdateController.swift`.
+
+Updates are signed with an EdDSA key: the public half is `SUPublicEDKey` in `Support/Info.plist`, the private half the `SPARKLE_ED_PRIVATE_KEY` secret in the `release` environment (kept in the maintainer's login keychain under the `sippy` account and in the team password manager). `make_appcast.sh` refuses to sign with a private key that doesn't match `SUPublicEDKey`. Losing the private key means installed copies can't be updated any more, short of reinstalling by hand. To set it up again:
+
+```sh
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account sippy        # prints the public key
+.build/artifacts/sparkle/Sparkle/bin/generate_keys --account sippy -x key # exports the private key
+gh secret set SPARKLE_ED_PRIVATE_KEY --env release < key && rm key
+```
+
+A build without `SUFeedURL` (or with it empty) runs without the updater.
 
 ## PBX test matrix
 

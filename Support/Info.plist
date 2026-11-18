@@ -66,5 +66,11 @@
 			</array>
 		</dict>
 	</array>
+	<key>SUFeedURL</key>
+	<string>https://github.com/brandnewteam/sippy/releases/latest/download/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>VxaplbTbKq0G94IUzplIwBlvkds8DF9xgR01UyCrgnA=</string>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
 </dict>
 </plist>
