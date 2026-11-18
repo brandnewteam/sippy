@@ -32,8 +32,6 @@
 	<string>Sippy needs the microphone for phone calls.</string>
 	<key>NSContactsUsageDescription</key>
 	<string>Sippy can show your address book contacts and use them for caller ID.</string>
-	<key>NSUserNotificationAlertStyle</key>
-	<string>alert</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>AGPLv3</string>
 	<key>CFBundleURLTypes</key>

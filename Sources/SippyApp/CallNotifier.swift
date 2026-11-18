@@ -140,6 +140,56 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
     }
 }
 
+/// How macOS shows Sippy's notifications. The user sets it in System
+/// Settings; the app can only read it. Only the persistent style keeps a
+/// ringing call on screen until it stops ringing — the temporary one slides
+/// away after a few seconds, and the Info.plist default for it is ignored.
+enum CallNotificationStyle {
+    case unknown, notAsked, off, temporary, persistent
+
+    static func current() async -> CallNotificationStyle {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        switch settings.authorizationStatus {
+        case .notDetermined: return .notAsked
+        case .denied: return .off
+        default: break
+        }
+        switch settings.alertStyle {
+        case .alert: return .persistent
+        case .banner: return .temporary
+        default: return .off
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .unknown: ""
+        case .notAsked: "Not set up"
+        case .off: "Off"
+        case .temporary: "Temporary"
+        case .persistent: "Persistent"
+        }
+    }
+
+    var footnote: String {
+        switch self {
+        case .unknown, .persistent:
+            "An incoming call shows a notification with Answer and Decline that stays up until the call stops ringing. Sippy never jumps in front of what you are doing."
+        case .notAsked, .off:
+            "Calls still ring, but without a notification you only see them in the menu bar or the main window. Allow notifications for Sippy in System Settings."
+        case .temporary:
+            "Temporary notifications slide away while the phone is still ringing. Set Sippy to Persistent (Alerts on older macOS) in System Settings to keep an incoming call on screen until you answer, decline, or the caller hangs up."
+        }
+    }
+
+    static func openSystemSettings() {
+        let id = Bundle.main.bundleIdentifier ?? ""
+        if let url = URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=\(id)") {
+            NSWorkspace.shared.open(url)
+        }
+    }
+}
+
 /// The main window, for code outside its views: the notifier and the menu
 /// bar bring it forward.
 @MainActor
