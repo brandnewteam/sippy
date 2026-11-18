@@ -24,10 +24,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppPresence.current.apply()
         wireUp()
         notifier.start()
-        if let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-           !feed.isEmpty {
+        if UpdateController.isConfigured {
             updates = UpdateController(engine: engine, notifier: notifier)
         }
+        MenuBarClicks.install()
         engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
         systemContacts.loadIfAuthorized()
