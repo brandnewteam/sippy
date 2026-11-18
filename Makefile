@@ -153,6 +153,11 @@ app: build $(ICON)
 	sparkle_fw=$$(find .build/artifacts -type d -name Sparkle.framework -path '*macos*' 2>/dev/null | head -1); \
 	    if [ -n "$$sparkle_fw" ]; then cp -R "$$sparkle_fw" $(APP)/Contents/Frameworks/; fi
 	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
+	@# The linphone frameworks ship a Modules -> Versions/Current/Modules
+	@# link with no Modules directory behind it (only compiling against a
+	@# framework needs one). Links to nothing are dead weight, and
+	@# `xattr -r` and friends trip over them, so drop any in the bundle.
+	find $(APP)/Contents/Frameworks -type l ! -exec test -e {} \; -print -delete
 	cp Support/Info.plist $(APP)/Contents/
 	cp $(ICON) $(APP)/Contents/Resources/
 	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones
