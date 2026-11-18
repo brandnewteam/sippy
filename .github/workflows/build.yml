@@ -37,7 +37,7 @@ permissions:
 jobs:
   build:
     runs-on: macos-26
-    timeout-minutes: 60
+    timeout-minutes: 90  # notarization alone can take half an hour
     # Only signed builds enter the environment holding the signing secrets.
     environment: ${{ (github.event_name == 'release' || inputs.sign) && 'release' || '' }}
     env:
