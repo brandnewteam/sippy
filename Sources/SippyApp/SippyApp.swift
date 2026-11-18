@@ -5,29 +5,7 @@ import SippyCore
 @main
 struct SippyApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
-    @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
     @AppStorage(MainWindowFloat.defaultsKey) private var floatsOnTop = false
-
-    /// Two-way: Settings drives it via AppStorage, and if the user removes
-    /// the extra some other way we fall back to Dock-only so the app never
-    /// becomes unreachable.
-    private var menuBarInserted: Binding<Bool> {
-        Binding(
-            get: { AppPresence(rawValue: presenceRaw)?.showsMenuBarExtra ?? true },
-            set: { inserted in
-                let current = AppPresence(rawValue: presenceRaw) ?? .dockAndMenuBar
-                let presence: AppPresence =
-                    inserted
-                    ? (current == .dockOnly ? .dockAndMenuBar : current)
-                    : .dockOnly
-                // MenuBarExtra(isInserted:) writes this binding back on every
-                // scene update; an unconditional write re-invalidates the
-                // scene body and loops forever, pegging the main thread.
-                guard presence != current else { return }
-                presenceRaw = presence.rawValue
-                presence.apply()
-            })
-    }
 
     var body: some Scene {
         // A single Window (not a WindowGroup): openWindow(id:) then fronts
@@ -76,17 +54,7 @@ struct SippyApp: App {
         }
         .keyboardShortcut("l", modifiers: [.command, .shift])
 
-        // Registration status + quick dial while the main window is closed
-        // (the engine keeps running window-less since M3).
-        MenuBarExtra(isInserted: menuBarInserted) {
-            MenuBarView(checkForUpdates: UpdateController.isConfigured
-                        ? { appDelegate.checkForUpdates(nil) } : nil)
-                .environment(appDelegate.engine)
-                .environment(appDelegate.store)
-        } label: {
-            MenuBarIcon()
-                .environment(appDelegate.engine)
-        }
+        // The menu bar icon is AppKit: see StatusItemController.
 
         Settings {
             SettingsView()

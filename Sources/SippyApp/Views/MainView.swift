@@ -88,7 +88,7 @@ struct MainView: View {
                 .environment(\.sippyTheme, theme)
                 .environment(engine)
         })
-        // For the call notification, when the menu bar extra is off.
+        // The menu bar icon captures it too, but is absent in Dock-only mode.
         .onAppear { MainWindow.opener = openWindow }
     }
 
