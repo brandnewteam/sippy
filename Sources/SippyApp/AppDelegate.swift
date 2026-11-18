@@ -1,5 +1,4 @@
 import AppKit
-import Sparkle
 import SippyCore
 
 /// Owns the app's long-lived objects and starts the SIP engine at launch.
@@ -15,21 +14,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let ringtones = RingtoneLibrary()
     private(set) lazy var notifier = CallNotifier(engine: engine)
 
-    /// Sparkle auto-updates. Dormant (nil) until an SUFeedURL is configured
-    /// in Info.plist — see README "Sparkle updates".
-    private(set) var updaterController: SPUStandardUpdaterController?
+    /// Sparkle auto-updates. Nil when Info.plist has no SUFeedURL (a bare
+    /// `swift run`, or a fork without a feed) — see README "Sparkle updates".
+    private(set) var updates: UpdateController?
 
-    var updatesConfigured: Bool { updaterController != nil }
+    var updatesConfigured: Bool { updates != nil }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
-           !feed.isEmpty {
-            updaterController = SPUStandardUpdaterController(
-                startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
-        }
         AppPresence.current.apply()
         wireUp()
         notifier.start()
+        if let feed = Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") as? String,
+           !feed.isEmpty {
+            updates = UpdateController(engine: engine, notifier: notifier)
+        }
         engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
         systemContacts.loadIfAuthorized()
@@ -54,7 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
 
-        engine.onCallFinished = { finished in
+        engine.onCallFinished = { [weak self] finished in
             let outcome: CallRecord.Outcome
             if finished.connectedAt != nil {
                 outcome = .answered
@@ -77,11 +75,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if outcome == .missed {
                 notifier.postMissedCall(display: finished.remoteDisplay, number: finished.remoteNumber)
             }
+            self?.updates?.callFinished()
         }
     }
 
     @objc func checkForUpdates(_ sender: Any?) {
-        updaterController?.checkForUpdates(sender)
+        updates?.checkForUpdates()
     }
 
     /// Matches NSMessage "callWithSippy" in the NSServices Info.plist entry.

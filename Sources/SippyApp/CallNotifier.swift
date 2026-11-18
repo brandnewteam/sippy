@@ -7,6 +7,7 @@ import UserNotifications
 /// forward on the call screen; its Answer and Decline actions act without
 /// taking focus. The notification goes away as soon as the call stops
 /// ringing, and a call nobody answered leaves a "Missed call" notification.
+/// It also posts the "update available" reminder for `UpdateController`.
 @MainActor
 final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
     private enum ID {
@@ -15,7 +16,12 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
         static let incomingRequest = "sippy.incoming-call"
         static let answer = "sippy.answer"
         static let decline = "sippy.decline"
+        static let updateCategory = "sippy.update"
+        static let updateRequest = "sippy.update-available"
     }
+
+    /// A click on the "update available" notification.
+    var onShowUpdate: (() -> Void)?
 
     private let engine: SIPEngine
     private let center = UNUserNotificationCenter.current()
@@ -39,6 +45,8 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
                 intentIdentifiers: [], options: []),
             UNNotificationCategory(
                 identifier: ID.missedCategory, actions: [], intentIdentifiers: [], options: []),
+            UNNotificationCategory(
+                identifier: ID.updateCategory, actions: [], intentIdentifiers: [], options: []),
         ])
         // No sound: the ringtone is already playing.
         center.requestAuthorization(options: [.alert]) { _, _ in }
@@ -84,6 +92,20 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
             identifier: UUID().uuidString, content: content, trigger: nil))
     }
 
+    func postUpdateAvailable(version: String) {
+        let content = UNMutableNotificationContent()
+        content.title = "Sippy \(version) is available"
+        content.body = "Click to see what’s new and install it."
+        content.categoryIdentifier = ID.updateCategory
+        center.add(UNNotificationRequest(
+            identifier: ID.updateRequest, content: content, trigger: nil))
+    }
+
+    func removeUpdateAvailable() {
+        center.removePendingNotificationRequests(withIdentifiers: [ID.updateRequest])
+        center.removeDeliveredNotifications(withIdentifiers: [ID.updateRequest])
+    }
+
     /// "Incoming call from 204" when the title is a name, plain otherwise.
     private static func line(_ prefix: String, _ display: String, _ number: String) -> String {
         display == number || number.isEmpty ? prefix : "\(prefix) from \(number)"
@@ -101,8 +123,9 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
         Task { @MainActor in
             // Sippy is the active app. With the call screen in sight the
             // banner only repeats it; otherwise (Settings in front, main
-            // window closed) it is the only sign of the call.
-            if !MainWindow.isInSight {
+            // window closed) it is the only sign of the call. An update
+            // reminder has nothing else showing it.
+            if !MainWindow.isInSight || category == ID.updateCategory {
                 completionHandler([.banner, .list])
             } else {
                 completionHandler(category == ID.incomingCategory ? [] : [.list])
@@ -116,7 +139,13 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let action = response.actionIdentifier
+        let category = response.notification.request.content.categoryIdentifier
         Task { @MainActor in
+            if category == ID.updateCategory {
+                if action == UNNotificationDefaultActionIdentifier { onShowUpdate?() }
+                completionHandler()
+                return
+            }
             handle(action: action)
             completionHandler()
         }
