@@ -157,8 +157,33 @@ app: build $(ICON)
 	cp $(ICON) $(APP)/Contents/Resources/
 	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Sippy
+	@# ditto zips store names as UTF-8 without the zip "UTF-8" flag; unzip
+	@# tools other than Apple's then guess the encoding, and a mangled name
+	@# breaks the code signature ("Sippy is damaged"). Keep names ASCII.
+	@bad=$$(cd $(APP) && find . | LC_ALL=C grep '[^ -~]'); \
+	if [ -n "$$bad" ]; then \
+	    echo "Non-ASCII file names in $(APP) (rename them):"; echo "$$bad"; exit 1; \
+	fi
 	@# Sign inside-out (nested code first) — required for the hardened runtime;
 	@# --deep is deprecated and signs nested code with no flags.
+	@# Code nested inside the frameworks goes first: loose plugins some SDK
+	@# frameworks carry (mediastreamer2's Libraries/libmswebrtc.so ships
+	@# unsigned) and Sparkle's helper processes, which come ad-hoc signed and
+	@# are signed the way Sparkle's docs prescribe (Downloader keeps its
+	@# entitlements). Notarization rejects any binary left unsigned or ad-hoc.
+	find $(APP)/Contents/Frameworks -mindepth 2 -type f \
+	    \( -name '*.so' -o -name '*.dylib' \) | \
+	    while read -r item; do \
+	        codesign --force $(SIGN_FLAGS) --sign "$(IDENTITY)" "$$item" || exit 1; \
+	    done
+	sparkle=$(APP)/Contents/Frameworks/Sparkle.framework/Versions/Current; \
+	if [ -d "$$sparkle" ]; then \
+	    codesign --force $(SIGN_FLAGS) --sign "$(IDENTITY)" "$$sparkle/XPCServices/Installer.xpc" && \
+	    codesign --force $(SIGN_FLAGS) --preserve-metadata=entitlements \
+	        --sign "$(IDENTITY)" "$$sparkle/XPCServices/Downloader.xpc" && \
+	    codesign --force $(SIGN_FLAGS) --sign "$(IDENTITY)" "$$sparkle/Autoupdate" && \
+	    codesign --force $(SIGN_FLAGS) --sign "$(IDENTITY)" "$$sparkle/Updater.app" || exit 1; \
+	fi
 	find $(APP)/Contents/Frameworks -maxdepth 1 \
 	    \( -name '*.framework' -o -name '*.dylib' -o -name '*.so' \) | \
 	    while read -r item; do \
@@ -181,9 +206,25 @@ release:
 
 # Requires stored credentials:
 #   xcrun notarytool store-credentials sippy --apple-id … --team-id … --password …
+# or NOTARY_AUTH with an App Store Connect API key (what CI does):
+#   make notarize NOTARY_AUTH="--key AuthKey_X.p8 --key-id X --issuer <uuid>"
+# The status is checked explicitly, and Apple's log printed on rejection
+# (it names the offending binary).
+NOTARY_AUTH ?= --keychain-profile $(NOTARY_PROFILE)
+
 notarize:
-	xcrun notarytool submit $(ZIP) --keychain-profile $(NOTARY_PROFILE) --wait
+	@out=$$(xcrun notarytool submit $(ZIP) $(NOTARY_AUTH) --wait --output-format json) || \
+	    { echo "$$out"; exit 1; }; \
+	echo "$$out"; \
+	status=$$(echo "$$out" | plutil -extract status raw -o - -); \
+	if [ "$$status" != Accepted ]; then \
+	    id=$$(echo "$$out" | plutil -extract id raw -o - -); \
+	    xcrun notarytool log "$$id" $(NOTARY_AUTH); \
+	    echo "Notarization status: $$status"; exit 1; \
+	fi
 	xcrun stapler staple $(APP)
+	xcrun stapler validate $(APP)
+	spctl --assess --type execute --verbose=2 $(APP)
 	ditto -c -k --keepParent $(APP) $(ZIP)
 	@echo "Notarized and stapled: $(ZIP)"
 

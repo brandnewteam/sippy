@@ -29,6 +29,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import unicodedata
 import urllib.parse
 import urllib.request
 
@@ -47,8 +48,9 @@ LICENSES = {
 }
 
 # (source file, author, year, license, sha256 of the source file)
-# The title is the source file's name; it becomes the WAV's name and the
-# name shown in Settings.
+# The title is the source file's name; folded to ASCII it becomes the WAV's
+# name and the name shown in Settings (non-ASCII names in the bundle get
+# mangled by unzip tools and break the code signature; see the Makefile).
 RINGTONES = [
     ("Call me.ogg", "Anonymous", 2018, "CC0-1.0",
      "70d821709cdc1df89558084794823eb4ca422eb5e5437cdaff11c742bacfdf10"),
@@ -71,6 +73,14 @@ OUT_DIR = os.path.normpath(
 def source_url(name):
     path = urllib.parse.quote(f"{SOURCE_DIR}/{name}")
     return f"{SOURCE_REPO}/-/raw/{SOURCE_COMMIT}/{path}"
+
+
+def ascii_name(title):
+    """Mangoré -> Mangore: drop accents, refuse anything else non-ASCII."""
+    folded = unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode()
+    if len(folded) != len(unicodedata.normalize("NFKC", title)):
+        sys.exit(f"{title}: can't be folded to an ASCII file name")
+    return folded
 
 
 def download(name, sha256):
@@ -147,7 +157,7 @@ def main():
                 f.write(download(name, sha256))
             loudness, peak = measure(source)
             gain = min(TARGET_LUFS - loudness, PEAK_CEILING_DB - peak)
-            output = f"{title}.wav"
+            output = ascii_name(title) + ".wav"
             convert(source, os.path.join(OUT_DIR, output), gain)
             print(f"{output}: {loudness:.1f} LUFS, peak {peak:.1f} dBFS, gain {gain:+.1f} dB")
             entries.append({
