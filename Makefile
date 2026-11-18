@@ -157,6 +157,13 @@ app: build $(ICON)
 	cp $(ICON) $(APP)/Contents/Resources/
 	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones
 	install_name_tool -add_rpath @executable_path/../Frameworks $(APP)/Contents/MacOS/Sippy
+	@# ditto zips store names as UTF-8 without the zip "UTF-8" flag; unzip
+	@# tools other than Apple's then guess the encoding, and a mangled name
+	@# breaks the code signature ("Sippy is damaged"). Keep names ASCII.
+	@bad=$$(cd $(APP) && find . | LC_ALL=C grep '[^ -~]'); \
+	if [ -n "$$bad" ]; then \
+	    echo "Non-ASCII file names in $(APP) (rename them):"; echo "$$bad"; exit 1; \
+	fi
 	@# Sign inside-out (nested code first) — required for the hardened runtime;
 	@# --deep is deprecated and signs nested code with no flags.
 	@# Code nested inside the frameworks goes first: loose plugins some SDK
