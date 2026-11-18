@@ -53,19 +53,35 @@ make release IDENTITY="Developer ID Application: …"   # properly signed
 make notarize NOTARY_PROFILE=sippy             # submit to Apple + staple
 ```
 
-`make release` produces `dist/Sippy-<version>.zip` from an optimized build, signing every nested framework/dylib and the app with the hardened runtime and `Support/Sippy.entitlements`. Ad-hoc signatures (the default) are fine locally; distribution needs a Developer ID certificate and notarization:
+`make release` produces `dist/Sippy-<version>.zip` from an optimized build, signing every nested binary (frameworks, plugins, Sparkle's helpers) and then the app, with the hardened runtime and `Support/Sippy.entitlements` when the identity is real. Ad-hoc signatures (the default) are fine locally; distribution needs a Developer ID certificate and notarization:
 
 1. Install a "Developer ID Application" certificate in the keychain.
-2. Store notary credentials once: `xcrun notarytool store-credentials sippy --apple-id you@example.com --team-id TEAMID --password <app-specific-password>`.
+2. Store notary credentials once: `xcrun notarytool store-credentials sippy --apple-id you@example.com --team-id TEAMID --password <app-specific-password>` (or pass an App Store Connect API key with `NOTARY_AUTH="--key … --key-id … --issuer …"`).
 3. `make release IDENTITY="Developer ID Application: Your Name (TEAMID)" && make notarize NOTARY_PROFILE=sippy`.
+
+`make notarize` fails (and prints Apple's log) unless the submission is accepted, then staples the ticket, re-zips the app and checks it with `spctl`.
 
 The version comes from `CFBundleShortVersionString` in `Support/Info.plist`.
 
 ### CI
 
-`.github/workflows/build.yml` runs on a GitHub macOS runner with full Xcode. On every pull request it runs `make test` and `make release`, then uploads the ad-hoc signed zip as a workflow artifact (kept 14 days) so the PR can be tried without a local toolchain. Publishing a GitHub release does the same and attaches `Sippy-<version>.zip` to the release; the tag (`v0.1.0` or `0.1.0`) must match the Info.plist version. It can also be started by hand from the Actions tab.
+`.github/workflows/build.yml` runs on a GitHub macOS runner with full Xcode. On every pull request it runs `make test` and `make release`, then uploads the ad-hoc signed zip as a workflow artifact (kept 14 days) so the PR can be tried without a local toolchain. Publishing a GitHub release builds the same way but signs with the Developer ID certificate, notarizes and staples, then attaches `Sippy-<version>.zip` to the release; the tag (`v0.1.0` or `0.1.0`) must match the Info.plist version. It can also be started by hand from the Actions tab, ticking "sign" for a signed and notarized build without a release.
 
-CI builds are ad-hoc signed, so macOS quarantines them after download: after unzipping, clear the flag with `xattr -dr com.apple.quarantine Sippy.app` (or right-click → Open).
+PR builds are ad-hoc signed, so macOS quarantines them after download: after unzipping, clear the flag with `xattr -dr com.apple.quarantine Sippy.app` (or right-click → Open). Release builds open normally.
+
+#### Signing on CI
+
+The signing secrets live in a GitHub environment named `release` (Settings → Environments), limited to the `main` branch and release tags (`v*` and `[0-9]*`) so pull requests can't reach them:
+
+| Secret | Contents |
+| --- | --- |
+| `DEVELOPER_ID_P12_BASE64` | The Developer ID Application certificate with its private key, exported as .p12, base64-encoded (`base64 -i cert.p12`) |
+| `DEVELOPER_ID_P12_PASSWORD` | The password chosen when exporting the .p12 |
+| `NOTARY_API_KEY` | Contents of the App Store Connect API key file (`AuthKey_XXXXXXXXXX.p8`) |
+| `NOTARY_API_KEY_ID` | That key's Key ID |
+| `NOTARY_API_ISSUER_ID` | The Issuer ID shown above the keys list in App Store Connect |
+
+The job imports the certificate into a throwaway keychain, picks the Developer ID identity from it, and deletes the keychain at the end.
 
 ### Sparkle updates
 
