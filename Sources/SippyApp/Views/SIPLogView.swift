@@ -27,11 +27,15 @@ struct SIPLogView: View {
             if engine.sipTrace.isEmpty {
                 emptyState
             } else {
+                // HSplitView ignores idealWidth and splits evenly; the
+                // priority hands all spare width to the message, so the list
+                // opens at its minimum and the divider still drags wider.
                 HSplitView {
                     entryList
-                        .frame(minWidth: 230, idealWidth: 260)
+                        .frame(minWidth: 200, maxWidth: 420)
                     detailPane
-                        .frame(minWidth: 320)
+                        .frame(minWidth: 320, maxWidth: .infinity)
+                        .layoutPriority(1)
                 }
             }
             if showNegotiation {
