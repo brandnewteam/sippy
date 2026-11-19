@@ -197,6 +197,9 @@ app: build $(ICON)
 	codesign --force $(SIGN_FLAGS) --entitlements Support/Sippy.entitlements \
 	    --sign "$(IDENTITY)" $(APP)
 	codesign --verify --deep --strict $(APP)
+	@codesign --display --entitlements - --xml $(APP) | \
+	    plutil -extract 'com\.apple\.security\.personal-information\.addressbook' raw -expect bool -o - - | \
+	    grep -qx true || { echo "Missing Contacts entitlement in $(APP)"; exit 1; }
 	@echo "Built $(APP) ($(CONFIG), identity: $(IDENTITY))"
 
 run-app: app
