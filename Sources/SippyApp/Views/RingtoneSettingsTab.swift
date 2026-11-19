@@ -20,7 +20,7 @@ struct RingtoneSettingsTab: View {
                     get: { engine.selectedRingerDevice ?? "" },
                     set: { engine.setRingerDevice($0) }
                 )) {
-                    ForEach(engine.ringerDevices, id: \.self) { Text($0).tag($0) }
+                    ForEach(engine.outputDevices) { Text($0.name).tag($0.id) }
                 }
             } footer: {
                 SettingsFootnote("The ring can go to the speakers while calls use the headset.")
@@ -34,7 +34,7 @@ struct RingtoneSettingsTab: View {
             SettingsBarNote("Imported files are copied into Sippy's library.")
             Button("Import…") { importRingtone() }
         }
-        .onAppear { engine.refreshRingerDevices() }
+        .onAppear { engine.refreshAudioDevices() }
     }
 
     private var selectedFileName: String? {

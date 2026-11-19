@@ -101,9 +101,6 @@ public final class SIPEngine {
     public private(set) var sipTrace: [SIPTraceEntry] = []
     public private(set) var sipTraceEnabled = UserDefaults.standard.bool(forKey: SIPEngine.sipTraceKey)
 
-    /// Devices the ring can play on (legacy sound-card names — the modern
-    /// AudioDevice API in this SDK version has no ring routing yet).
-    public private(set) var ringerDevices: [String] = []
     public private(set) var selectedRingerDevice: String?
 
     private static let sipTraceKey = "sippy.sipTraceEnabled"
@@ -167,7 +164,6 @@ public final class SIPEngine {
 
             refreshAudioDevices()
             applyStoredAudioDevices()
-            refreshRingerDevices()
             if let stored = UserDefaults.standard.string(forKey: Self.ringerDeviceKey) {
                 setRingerDevice(stored)
             }
@@ -355,6 +351,7 @@ public final class SIPEngine {
             devices.filter { $0.hasCapability(capability: .CapabilityPlay) }, isInput: false)
         selectedInputID = core.defaultInputAudioDevice?.id
         selectedOutputID = core.defaultOutputAudioDevice?.id
+        selectedRingerDevice = (core as RingerDeviceCompat).currentRingerDevice
     }
 
     private static func deviceInfos(_ devices: [AudioDevice], isInput: Bool) -> [AudioDeviceInfo] {
@@ -424,22 +421,16 @@ public final class SIPEngine {
         AccountConfigStore.save(account)
     }
 
-    public func refreshRingerDevices() {
-        guard let core else { return }
-        let compat: RingerDeviceCompat = core
-        ringerDevices = compat.soundDeviceNames
-        selectedRingerDevice = compat.currentRingerDevice
-    }
-
     /// Routes ringing to a specific output (e.g. speakers while calls go to
     /// the headset). Persisted and re-applied across launches and hot-plugs.
-    public func setRingerDevice(_ name: String) {
-        guard let core else { return }
+    public func setRingerDevice(_ id: String) {
+        guard let core, outputDevices.contains(where: { $0.id == id }) else { return }
         let compat: RingerDeviceCompat = core
-        guard compat.soundDeviceNames.contains(name) else { return }
-        try? compat.setRingerDeviceName(name)
+        do {
+            try compat.setRingerDeviceName(id)
+        } catch { return }
         selectedRingerDevice = compat.currentRingerDevice
-        UserDefaults.standard.set(name, forKey: Self.ringerDeviceKey)
+        UserDefaults.standard.set(id, forKey: Self.ringerDeviceKey)
     }
 
     // MARK: - Hardening
@@ -705,10 +696,8 @@ public final class SIPEngine {
                     guard let self else { return }
                     self.refreshAudioDevices()
                     self.applyStoredAudioDevices()
-                    self.refreshRingerDevices()
                     // Re-pin the preferred ringer if it just got plugged back in.
                     if let preferred = UserDefaults.standard.string(forKey: Self.ringerDeviceKey),
-                       self.ringerDevices.contains(preferred),
                        self.selectedRingerDevice != preferred {
                         self.setRingerDevice(preferred)
                     }
@@ -880,19 +869,14 @@ public final class SIPEngine {
     }
 }
 
-/// This SDK version only exposes ring routing through the legacy sound-card
-/// API (the modern AudioDevice API has no setUseForRinging yet). Going through
-/// a protocol witness keeps the deliberate use of the deprecated members from
-/// warning on every build.
+/// The single-device ringer API uses the same IDs as extendedAudioDevices.
+/// Calling through the protocol keeps the deprecated SDK calls isolated.
 private protocol RingerDeviceCompat {
-    var soundDeviceNames: [String] { get }
     var currentRingerDevice: String? { get }
     func setRingerDeviceName(_ name: String) throws
 }
 
 extension Core: RingerDeviceCompat {
-    @available(*, deprecated)
-    var soundDeviceNames: [String] { soundDevicesList }
     @available(*, deprecated)
     var currentRingerDevice: String? { ringerDevice }
     @available(*, deprecated)
