@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 import SippyCore
 
-/// The menu bar icon: a left click opens Sippy, a right click (or Control-
+/// A left click toggles Sippy's main window. A right click (or Control-
 /// click) opens the menu with registration state, current-call quick
 /// actions, favorite-contact speed dial and window/update/quit plumbing.
 ///
@@ -23,7 +23,8 @@ final class StatusItemController: NSObject {
         self.engine = engine
         self.store = store
         self.checkForUpdates = checkForUpdates
-        item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        // Fits the widest phone badge. AppKit adds its own side margins.
+        item = NSStatusBar.system.statusItem(withLength: 18)
         super.init()
 
         if let button = item.button {
@@ -102,7 +103,7 @@ final class StatusItemController: NSObject {
         if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
             showMenu()
         } else {
-            MainWindow.show(activating: true)
+            MainWindow.toggle()
         }
     }
 

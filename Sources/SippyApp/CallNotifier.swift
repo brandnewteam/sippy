@@ -234,6 +234,14 @@ enum MainWindow {
         return window.isVisible && !window.isMiniaturized
     }
 
+    static func toggle() {
+        if let window, window.isVisible, !window.isMiniaturized, !NSApp.isHidden {
+            window.performClose(nil)
+        } else {
+            show(activating: true)
+        }
+    }
+
     /// `activating: false` only orders an open window to the front;
     /// opening a closed one would take focus, so it stays closed.
     static func show(activating: Bool) {
