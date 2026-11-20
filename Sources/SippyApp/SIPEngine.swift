@@ -118,7 +118,14 @@ public final class SIPEngine {
     /// Invoked once per call after it is fully released.
     public var onCallFinished: ((FinishedCall) -> Void)?
 
+    /// Calls and settings use only the running core. The timer continues to
+    /// drive a shutting-down core until Linphone reports Off.
     private var core: Core?
+    private var stoppingCore: Core?
+    /// Reuse the current session's credentials across VPN changes without
+    /// prompting for Keychain access on every reconnect.
+    @ObservationIgnored private var accountPassword: String?
+    private var ringtonePath: String?
     private var delegate: CoreDelegateStub?
     private var logDelegate: LoggingServiceDelegateStub?
     private var iterateTimer: Timer?
@@ -144,11 +151,25 @@ public final class SIPEngine {
     // MARK: - Lifecycle
 
     public func start() {
-        guard core == nil else { return }
+        guard pathMonitor == nil else { return }
+        applyLogLevel()
+        installLogCapture()
+        Factory.Instance.mspluginsDir = Self.pluginsDirectory()
+        startCore()
+        startHardeningMonitors()
+        if account.isConfigured {
+            if account.requireRoute {
+                core?.networkReachable = false
+                scheduleRouteProbe()
+            }
+            loadStoredCredentialsAndRegister()
+        }
+    }
+
+    private func startCore() {
+        // A route can return while the previous core is still shutting down.
+        guard core == nil, stoppingCore == nil, !routeGateClosed else { return }
         do {
-            applyLogLevel()
-            installLogCapture()
-            Factory.Instance.mspluginsDir = Self.pluginsDirectory()
             let core = try Factory.Instance.createCore(configPath: nil, factoryConfigPath: nil, systemContext: nil)
             core.videoActivationPolicy?.automaticallyAccept = false
             core.videoActivationPolicy?.automaticallyInitiate = false
@@ -157,7 +178,7 @@ public final class SIPEngine {
             self.core = core
 
             let timer = Timer(timeInterval: 0.02, repeats: true) { [weak self] _ in
-                MainActor.assumeIsolated { self?.core?.iterate() }
+                MainActor.assumeIsolated { (self?.core ?? self?.stoppingCore)?.iterate() }
             }
             RunLoop.main.add(timer, forMode: .common)
             iterateTimer = timer
@@ -170,13 +191,31 @@ public final class SIPEngine {
             codecPreferences = CodecDefaults.merge(
                 stored: account.codecPreferences, available: snapshotAvailableCodecs())
             applyCodecPreferencesToCore()
-            if account.isConfigured {
-                loadStoredCredentialsAndRegister()
+            core.ring = ringtonePath
+            if !account.requireRoute, let pathMonitor {
+                core.networkReachable = pathMonitor.currentPath.status == .satisfied
             }
-            startHardeningMonitors()
+            configureCoreAccount()
         } catch {
             registration = .failed("Could not start SIP engine: \(error)")
         }
+    }
+
+    private func stopCoreIfWaiting() {
+        guard routeGateClosed, activeCall == nil, let core,
+              core.globalState == .On, core.callsNb == 0 else { return }
+        stoppingCore = core
+        self.core = nil
+        core.stopAsync()
+    }
+
+    private func coreDidStop() {
+        guard stoppingCore != nil else { return }
+        iterateTimer?.invalidate()
+        iterateTimer = nil
+        delegate = nil
+        stoppingCore = nil
+        if !routeGateClosed { startCore() }
     }
 
     // MARK: - Account
@@ -187,34 +226,49 @@ public final class SIPEngine {
     /// doing that on the main thread at launch beachballs the whole app.
     private func loadStoredCredentialsAndRegister() {
         let key = account.keychainKey
-        registration = .connecting
+        if core != nil { registration = .connecting }
         Task.detached(priority: .userInitiated) {
             let password = KeychainStore.password(for: key) ?? ""
             await MainActor.run { [weak self] in
-                guard let self else { return }
-                self.configureCore(with: self.account, password: password)
+                // Apply may have supplied a newer password (even for the same
+                // identity) while the Keychain prompt was open.
+                guard let self, self.accountPassword == nil, self.account.keychainKey == key else { return }
+                self.accountPassword = password
+                self.configureCoreAccount()
             }
         }
     }
 
     public func applyAccount(_ config: AccountConfig, password: String) {
-        guard core != nil else { return }
         // Codec preferences and the ringtone are managed by their own
         // settings UIs, not the account form — carry the current values over.
         var config = config
         config.codecPreferences = codecPreferences
         config.ringtone = account.ringtone
+        let wasGated = account.requireRoute && account.isConfigured
         account = config
+        accountPassword = password
         AccountConfigStore.save(config)
         // User-initiated (Apply button), so a keychain prompt here is fine.
         KeychainStore.setPassword(password, for: config.keychainKey)
-        configureCore(with: config, password: password)
+        let needsProbe = config.requireRoute && config.isConfigured
+        if needsProbe, activeCall == nil { core?.networkReachable = false }
+        configureCoreAccount()
+        if needsProbe {
+            scheduleRouteProbe()
+        } else if wasGated || core == nil {
+            // Discard any result for the previous account or route policy.
+            routeProbeGeneration += 1
+            routeProbeTask?.cancel()
+            routeGate(open: true)
+        }
     }
 
     /// Points the SIP stack at the account — everything after credentials
     /// are in hand. Never touches the keychain.
-    private func configureCore(with config: AccountConfig, password: String) {
-        guard let core else { return }
+    private func configureCoreAccount() {
+        guard let core, let password = accountPassword else { return }
+        let config = account
         core.clearAccounts()
         core.clearAllAuthInfo()
         guard config.isConfigured else {
@@ -251,16 +305,7 @@ public final class SIPEngine {
             let sipAccount = try core.createAccount(params: params)
             try core.addAccount(account: sipAccount)
             core.defaultAccount = sipAccount
-            registration = .connecting
-            if config.requireRoute {
-                scheduleRouteProbe()
-            } else if routeGateClosed {
-                // Gating switched off: hand reachability back to the OS path.
-                routeGateClosed = false
-                routeRetryTimer?.invalidate()
-                routeRetryTimer = nil
-                core.networkReachable = true
-            }
+            registration = routeGateClosed ? .waitingForRoute : .connecting
         } catch {
             registration = .failed("Invalid account settings: \(error)")
         }
@@ -269,14 +314,11 @@ public final class SIPEngine {
     // MARK: - Calls
 
     public func dial(_ raw: String, origin: NumberOrigin) {
-        guard let core, call == nil, account.isConfigured else { return }
+        guard call == nil, account.isConfigured else { return }
         let number = account.dialPlan.apply(to: raw, origin: origin)
         guard !number.isEmpty else { return }
-        lastCallError = nil
         let uri = number.hasPrefix("sip:") ? number : "sip:\(number)@\(account.domain)"
-        if core.invite(url: uri) == nil {
-            lastCallError = "Could not start the call."
-        }
+        dialURI(uri)
     }
 
     /// Entry point for URLs, the Services menu, and paste-and-dial.
@@ -289,15 +331,23 @@ public final class SIPEngine {
         }
     }
 
-    /// Dials a complete SIP URI verbatim (no dial-plan rewriting).
     /// Dismisses the last call's failure reason (the main window shows it
     /// until then, or until the next call).
     public func clearLastCallError() {
         lastCallError = nil
     }
 
+    /// Dials a complete SIP URI verbatim (no dial-plan rewriting).
     public func dialURI(_ uri: String) {
-        guard let core, call == nil else { return }
+        guard call == nil else { return }
+        if routeGateClosed {
+            lastCallError = "Waiting for a network route to the SIP server."
+            return
+        }
+        guard let core else {
+            lastCallError = "The SIP engine is unavailable."
+            return
+        }
         lastCallError = nil
         if core.invite(url: uri) == nil {
             lastCallError = "Could not start the call."
@@ -361,12 +411,18 @@ public final class SIPEngine {
 
     /// The choice is persisted and re-applied across launches and hot-plugs.
     public func selectInputDevice(id: String) {
-        guard applyInputDevice(id: id) else { return }
+        if core == nil {
+            guard inputDevices.contains(where: { $0.id == id }) else { return }
+            selectedInputID = id
+        } else if !applyInputDevice(id: id) { return }
         UserDefaults.standard.set(id, forKey: Self.inputDeviceKey)
     }
 
     public func selectOutputDevice(id: String) {
-        guard applyOutputDevice(id: id) else { return }
+        if core == nil {
+            guard outputDevices.contains(where: { $0.id == id }) else { return }
+            selectedOutputID = id
+        } else if !applyOutputDevice(id: id) { return }
         UserDefaults.standard.set(id, forKey: Self.outputDeviceKey)
     }
 
@@ -410,13 +466,14 @@ public final class SIPEngine {
     /// Points the stack's ring player at a sound file; nil restores the SDK
     /// default ring.
     public func setRingtonePath(_ path: String?) {
+        ringtonePath = path
         core?.ring = path
     }
 
     /// User picked a ringtone: apply it and persist the choice (by filename,
     /// so the library can move) with the account.
     public func setRingtone(fileName: String?, path: String?) {
-        core?.ring = path
+        setRingtonePath(path)
         account.ringtone = fileName
         AccountConfigStore.save(account)
     }
@@ -424,12 +481,16 @@ public final class SIPEngine {
     /// Routes ringing to a specific output (e.g. speakers while calls go to
     /// the headset). Persisted and re-applied across launches and hot-plugs.
     public func setRingerDevice(_ id: String) {
-        guard let core, outputDevices.contains(where: { $0.id == id }) else { return }
-        let compat: RingerDeviceCompat = core
-        do {
-            try compat.setRingerDeviceName(id)
-        } catch { return }
-        selectedRingerDevice = compat.currentRingerDevice
+        guard outputDevices.contains(where: { $0.id == id }) else { return }
+        if let core {
+            let compat: RingerDeviceCompat = core
+            do {
+                try compat.setRingerDeviceName(id)
+            } catch { return }
+            selectedRingerDevice = compat.currentRingerDevice
+        } else {
+            selectedRingerDevice = id
+        }
         UserDefaults.standard.set(id, forKey: Self.ringerDeviceKey)
     }
 
@@ -452,7 +513,7 @@ public final class SIPEngine {
             forName: NSWorkspace.didWakeNotification, object: nil, queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                guard let self, let core = self.core else { return }
+                guard let self else { return }
                 // With route gating on, probe before registering — waking
                 // away from the VPN shouldn't produce a round of timeouts
                 // (Telephone gates its wake re-register the same way).
@@ -460,6 +521,7 @@ public final class SIPEngine {
                     self.scheduleRouteProbe()
                     return
                 }
+                guard let core = self.core else { return }
                 if self.account.isConfigured { self.registration = .connecting }
                 core.refreshRegisters()
             }
@@ -484,7 +546,6 @@ public final class SIPEngine {
     }
 
     private func networkChanged(reachable: Bool) {
-        guard let core else { return }
         if account.requireRoute, account.isConfigured {
             // Route gating decides reachability itself: probe the domain
             // (debounced — VPN connects flap the path several times).
@@ -502,6 +563,7 @@ public final class SIPEngine {
         // Telling the stack about reachability flips make it drop and rebuild
         // its transports; a refresh on the way up re-registers promptly
         // instead of waiting out the register timer.
+        guard let core else { return }
         core.networkReachable = reachable
         if reachable, account.isConfigured {
             registration = .connecting
@@ -540,28 +602,34 @@ public final class SIPEngine {
     }
 
     private func routeGate(open: Bool) {
-        guard let core else { return }
         if open {
             let wasClosed = routeGateClosed
             routeGateClosed = false
             routeRetryTimer?.invalidate()
             routeRetryTimer = nil
-            core.networkReachable = true
-            if wasClosed || registration != .registered {
+            guard let core else {
+                registration = account.isConfigured ? .connecting : .unconfigured
+                startCore()
+                return
+            }
+            let reachable = account.requireRoute || pathMonitor?.currentPath.status != .unsatisfied
+            core.networkReachable = reachable
+            if core.defaultAccount != nil, reachable, wasClosed || registration != .registered {
                 registration = .connecting
                 core.refreshRegisters()
             }
         } else {
             routeGateClosed = true
-            core.networkReachable = false
+            core?.networkReachable = false
             registration = .waitingForRoute
             if routeRetryTimer == nil {
                 let timer = Timer(timeInterval: 90, repeats: true) { [weak self] _ in
-                    MainActor.assumeIsolated { self?.probeRoute() }
+                    MainActor.assumeIsolated { self?.scheduleRouteProbe() }
                 }
                 RunLoop.main.add(timer, forMode: .common)
                 routeRetryTimer = timer
             }
+            stopCoreIfWaiting()
         }
     }
 
@@ -591,7 +659,7 @@ public final class SIPEngine {
     }
 
     private func snapshotAvailableCodecs() -> [CodecPreference] {
-        guard let core else { return [] }
+        guard let core else { return codecPreferences }
         return core.audioPayloadTypes.map {
             CodecPreference(
                 mime: $0.mimeType, clockRate: $0.clockRate,
@@ -685,6 +753,11 @@ public final class SIPEngine {
 
     private func installDelegate(on core: Core) {
         let delegate = CoreDelegateStub(
+            onGlobalStateChanged: { [weak self] _, state, _ in
+                // Finish the last iterate() before releasing the core or
+                // starting another one, including when the route flaps.
+                if state == .Off { DispatchQueue.main.async { self?.coreDidStop() } }
+            },
             onCallStateChanged: { [weak self] _, lpCall, state, message in
                 MainActor.assumeIsolated { self?.callChanged(lpCall, state: state, message: message) }
             },
@@ -703,8 +776,11 @@ public final class SIPEngine {
                     }
                 }
             },
-            onAccountRegistrationStateChanged: { [weak self] _, _, state, message in
-                MainActor.assumeIsolated { self?.registrationChanged(state, message: message) }
+            onAccountRegistrationStateChanged: { [weak self] core, _, state, message in
+                MainActor.assumeIsolated {
+                    guard let self, self.core === core else { return }
+                    self.registrationChanged(state, message: message)
+                }
             })
         core.addDelegate(delegate: delegate)
         self.delegate = delegate
@@ -713,7 +789,7 @@ public final class SIPEngine {
     private func registrationChanged(_ state: RegistrationState, message: String) {
         // While the route gate is closed, late failures/teardowns from the
         // stack shouldn't repaint the deliberate "waiting" state as an error.
-        if routeGateClosed, state != .Ok {
+        if routeGateClosed {
             registration = .waitingForRoute
             return
         }
@@ -816,6 +892,10 @@ public final class SIPEngine {
             activeCall = nil
             call = nil
             ringStartedAt = nil
+            if routeGateClosed {
+                // The SDK forbids stopAsync() from inside its own callbacks.
+                DispatchQueue.main.async { [weak self] in self?.stopCoreIfWaiting() }
+            }
         case .Idle, .IncomingEarlyMedia, .Referred:
             break
         }

@@ -15,7 +15,7 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 - **At home on macOS** — menu bar icon (click to open Sippy, right-click for quick answer/hang-up, favorites speed-dial and Check for Updates), start at login, Dock/menu-bar presence choice, Window › Float on Top, re-registration on network change and wake.
 - **Themes** — the main window is a single coloured pane taken from the app icon: three schemes (Enamel, Night Signal, Vivid), each dark or light or following the system, with the Dialpad / Contacts / History tabs in the title bar or as a bottom tab bar (Settings › General).
 - **NAT traversal** — received/rport IP rewrite toggle, optional STUN/ICE.
-- **VPN-aware registration** (opt-in) — register only while a route to the server exists. For PBXes reached over a VPN: no timeout noise while the tunnel is down, instant re-register when it comes up. Private server addresses need a specific (VPN-pushed or LAN) route; the catch-all default route doesn't count.
+- **VPN-aware registration** (opt-in) — when the route to the PBX disappears, Sippy stops SIP polling as soon as any current call has finished. It watches macOS network changes and registers again when the route returns. Private server addresses need a specific VPN or LAN route.
 
 ## Building
 
