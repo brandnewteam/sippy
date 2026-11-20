@@ -6,8 +6,8 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 
 ## Features
 
-- **Calling** — dialpad, mute/hold, DTMF, audio device selection, and call history with redial. While you work in another app, a panel under the menu bar lets you answer or decline and keeps keyboard focus in that app. Incoming and missed calls also appear in Notification Center when notifications are enabled.
-- **Media during incoming calls** — Sippy lowers other audio on the Mac’s default output while ringing. Answering pauses the active macOS Now Playing session. Declining or missing the call restores the normal level as playback continues. After an answered call, you can resume playback in your player.
+- **Calling** — dialpad, mute/hold, DTMF, audio device selection, and call history with redial. In Settings → General → Incoming Calls, choose a themed floating window (the default) or a macOS notification to answer or decline while working in another app. Missed calls appear in Notification Center when notifications are enabled.
+- **Media during incoming calls** — Sippy lowers other audio on the Mac’s default output while ringing and pauses the active macOS Now Playing session when you answer. Declining or missing the call restores the normal level as playback continues. After an answered call, you can resume playback in your player. One toggle in Settings → General → Incoming Calls controls both behaviors and is on by default.
 - **Contacts** — Sippy's own store for PBX extensions (favorites, multiple numbers) merged with the system address book; caller-ID resolution checks both.
 - **Origin-aware dial plan** — numbers arriving from outside the app (`tel:`/`callto:`/`sip:` links, the "Call with Sippy" Services menu entry, paste-and-dial ⇧⌘V) and from system contacts get your outside-line prefix (`0`, `0*4`, …); the dialpad and Sippy contacts dial verbatim.
 - **Codecs** — reorderable per-codec priority list, defaults Opus → G.722 → G.711 → G.729. G.729 works even though the prebuilt linphone SDK omits it (see Vendored pieces).

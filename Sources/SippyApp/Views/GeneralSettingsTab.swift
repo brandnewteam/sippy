@@ -5,6 +5,8 @@ import SwiftUI
 /// Settings → General: login item, where the app shows itself, and how the
 /// main window looks.
 struct GeneralSettingsTab: View {
+    @Environment(SIPEngine.self) private var engine
+    @AppStorage(IncomingCallAlert.defaultsKey) private var incomingAlert = IncomingCallAlert.floatingWindow
     @AppStorage(AppPresence.defaultsKey) private var presenceRaw = AppPresence.dockAndMenuBar.rawValue
     @AppStorage(SippyScheme.defaultsKey) private var scheme = SippyScheme.enamel
     @AppStorage(SippyMode.defaultsKey) private var mode = SippyMode.dark
@@ -14,6 +16,7 @@ struct GeneralSettingsTab: View {
     @ViewState private var notificationStyle = CallNotificationStyle.unknown
 
     var body: some View {
+        @Bindable var engine = engine
         SettingsPane {
             Section {
                 Toggle("Start Sippy at login", isOn: $launchAtLogin)
@@ -41,17 +44,27 @@ struct GeneralSettingsTab: View {
                 }
             }
             Section {
-                LabeledContent("Notifications") {
-                    HStack {
-                        Text(notificationStyle.label)
-                            .foregroundStyle(.secondary)
-                        Button("Change…") { CallNotificationStyle.openSystemSettings() }
+                Picker("Show incoming calls with", selection: $incomingAlert) {
+                    Text("Floating window").tag(IncomingCallAlert.floatingWindow)
+                    Text("macOS notification").tag(IncomingCallAlert.notification)
+                }
+                if incomingAlert == .notification {
+                    LabeledContent("Notification style") {
+                        HStack {
+                            Text(notificationStyle.label)
+                                .foregroundStyle(.secondary)
+                            Button("Change…") { CallNotificationStyle.openSystemSettings() }
+                        }
                     }
                 }
+                Toggle("Lower other audio while ringing and pause it on answer",
+                       isOn: $engine.managesIncomingCallMedia)
             } header: {
                 Text("Incoming Calls")
             } footer: {
-                SettingsFootnote(notificationStyle.footnote)
+                SettingsFootnote(incomingAlert == .floatingWindow
+                    ? "The floating window follows Sippy’s theme and lets you answer without switching apps."
+                    : notificationStyle.footnote)
             }
             Section {
                 Picker("Color scheme", selection: $scheme) {

@@ -103,6 +103,14 @@ public final class SIPEngine {
 
     public private(set) var selectedRingerDevice: String?
 
+    var managesIncomingCallMedia = UserDefaults.standard.object(forKey: SIPEngine.callMediaKey) as? Bool ?? true {
+        didSet {
+            UserDefaults.standard.set(managesIncomingCallMedia, forKey: Self.callMediaKey)
+            if call?.phase == .ringingIncoming { updateRingingMedia() }
+        }
+    }
+
+    private static let callMediaKey = "sippy.manageIncomingCallMedia"
     private static let sipTraceKey = "sippy.sipTraceEnabled"
     private static let ringerDeviceKey = "sippy.ringerDevice"
     private static let inputDeviceKey = "sippy.inputDevice"
@@ -844,6 +852,14 @@ public final class SIPEngine {
         }
     }
 
+    private func updateRingingMedia() {
+        if managesIncomingCallMedia {
+            incomingMedia.beginRinging()
+        } else {
+            incomingMedia.endRinging()
+        }
+    }
+
     private func callChanged(_ lpCall: Call, state: Call.State, message: String) {
         // Single-call policy for M1: a second incoming call is politely refused.
         if let activeCall, lpCall !== activeCall {
@@ -861,7 +877,7 @@ public final class SIPEngine {
             declinedLocally = false
             statsHistory = []
             call = makeInfo(for: lpCall, phase: .ringingIncoming)
-            incomingMedia.beginRinging()
+            updateRingingMedia()
         case .OutgoingInit, .OutgoingProgress, .OutgoingRinging, .OutgoingEarlyMedia:
             activeCall = lpCall
             if call == nil { ringStartedAt = Date(); declinedLocally = false; statsHistory = [] }
