@@ -2,11 +2,9 @@ import AppKit
 import SwiftUI
 import UserNotifications
 
-/// Incoming calls arrive as a notification, never as a window that jumps
-/// in front of what you are doing. Clicking the notification brings Sippy
-/// forward on the call screen; its Answer and Decline actions act without
-/// taking focus. The notification goes away as soon as the call stops
-/// ringing, and a call nobody answered leaves a "Missed call" notification.
+/// Presents incoming calls in a nonactivating panel and in Notification
+/// Center. Both follow the ringing state. A call nobody answered leaves a
+/// "Missed call" notification.
 /// It also posts the "update available" reminder for `UpdateController`.
 @MainActor
 final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
@@ -25,6 +23,7 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
 
     private let engine: SIPEngine
     private let center = UNUserNotificationCenter.current()
+    private var incomingPanel: IncomingCallPanel?
     /// The ringing call has a notification up.
     private var notifying = false
 
@@ -50,6 +49,10 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
         ])
         // No sound: the ringtone is already playing.
         center.requestAuthorization(options: [.alert]) { _, _ in }
+        for name in [NSApplication.didBecomeActiveNotification, NSApplication.didResignActiveNotification,
+                     NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            NotificationCenter.default.addObserver(self, selector: #selector(focusChanged), name: name, object: nil)
+        }
         observeCall()
     }
 
@@ -62,6 +65,27 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
             Task { @MainActor in self?.observeCall() }
         }
         update(ringing: phase == .ringingIncoming)
+        updateIncomingPanel()
+    }
+
+    @objc private func focusChanged() {
+        guard engine.call?.phase == .ringingIncoming else { return }
+        // A key window change posts resign and become notifications in succession.
+        DispatchQueue.main.async { [weak self] in self?.updateIncomingPanel() }
+    }
+
+    private func updateIncomingPanel() {
+        let usingCallWindow = NSApp.isActive && MainWindow.window?.isKeyWindow == true
+        guard engine.call?.phase == .ringingIncoming, !usingCallWindow else {
+            incomingPanel?.orderOut(nil)
+            incomingPanel = nil
+            return
+        }
+        if incomingPanel == nil {
+            let panel = IncomingCallPanel(engine: engine)
+            incomingPanel = panel
+            panel.present()
+        }
     }
 
     private func update(ringing: Bool) {
@@ -121,10 +145,8 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
         let category = notification.request.content.categoryIdentifier
         // Delegate calls may come on any queue.
         Task { @MainActor in
-            // Sippy is the active app. With the call screen in sight the
-            // banner only repeats it; otherwise (Settings in front, main
-            // window closed) it is the only sign of the call. An update
-            // reminder has nothing else showing it.
+            // Suppress the system banner when the call screen is in sight.
+            // Update reminders always get a banner.
             if !MainWindow.isInSight || category == ID.updateCategory {
                 completionHandler([.banner, .list])
             } else {
@@ -170,9 +192,7 @@ final class CallNotifier: NSObject, UNUserNotificationCenterDelegate {
 }
 
 /// How macOS shows Sippy's notifications. The user sets it in System
-/// Settings; the app can only read it. Only the persistent style keeps a
-/// ringing call on screen until it stops ringing — the temporary one slides
-/// away after a few seconds, and the Info.plist default for it is ignored.
+/// Settings. The floating call panel works independently of this style.
 enum CallNotificationStyle {
     case unknown, notAsked, off, temporary, persistent
 
@@ -203,11 +223,11 @@ enum CallNotificationStyle {
     var footnote: String {
         switch self {
         case .unknown, .persistent:
-            "An incoming call shows a notification with Answer and Decline that stays up until the call stops ringing. Sippy never jumps in front of what you are doing."
+            "Incoming call notifications offer Answer and Decline. You can also answer from the floating call panel while working in another app."
         case .notAsked, .off:
-            "Calls still ring, but without a notification you only see them in the menu bar or the main window. Allow notifications for Sippy in System Settings."
+            "The floating panel shows incoming calls. Allow notifications in System Settings to see calls in Notification Center as well."
         case .temporary:
-            "Temporary notifications slide away while the phone is still ringing. Set Sippy to Persistent (Alerts on older macOS) in System Settings to keep an incoming call on screen until you answer, decline, or the caller hangs up."
+            "Temporary notifications disappear after a few seconds. The floating call panel stays available while the call rings."
         }
     }
 

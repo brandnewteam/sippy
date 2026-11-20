@@ -6,7 +6,7 @@ Built with Swift 6 / SwiftUI on [liblinphone](https://linphone.org) 5.x. See [PL
 
 ## Features
 
-- **Calling** — dialpad, mute/hold, DTMF, audio device selection, call history with redial, incoming/outgoing call UI; incoming calls come as a notification with Answer and Decline (never a window stealing focus), and missed calls leave one.
+- **Calling** — dialpad, mute/hold, DTMF, audio device selection, and call history with redial. While you work in another app, a panel under the menu bar lets you answer or decline and keeps keyboard focus in that app. Incoming and missed calls also appear in Notification Center when notifications are enabled.
 - **Contacts** — Sippy's own store for PBX extensions (favorites, multiple numbers) merged with the system address book; caller-ID resolution checks both.
 - **Origin-aware dial plan** — numbers arriving from outside the app (`tel:`/`callto:`/`sip:` links, the "Call with Sippy" Services menu entry, paste-and-dial ⇧⌘V) and from system contacts get your outside-line prefix (`0`, `0*4`, …); the dialpad and Sippy contacts dial verbatim.
 - **Codecs** — reorderable per-codec priority list, defaults Opus → G.722 → G.711 → G.729. G.729 works even though the prebuilt linphone SDK omits it (see Vendored pieces).

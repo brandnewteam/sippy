@@ -207,16 +207,17 @@ struct PillButtonStyle: ButtonStyle {
     private struct PillBody: View {
         let configuration: ButtonStyleConfiguration
         let kind: Kind
+        @Environment(\.controlSize) private var controlSize
         @Environment(\.isEnabled) private var isEnabled
         @Environment(\.sippyTheme) private var theme
         @ViewState private var hovering = false
 
         var body: some View {
             configuration.label
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: controlSize == .small ? 12 : 15, weight: .semibold))
                 .foregroundStyle(glyph)
                 .frame(maxWidth: .infinity)
-                .frame(height: 52)
+                .frame(height: controlSize == .small ? 32 : 52)
                 .background(Capsule().fill(fill))
                 .overlay(Capsule().fill(theme.veil(
                     pressed: isEnabled && configuration.isPressed, hovering: isEnabled && hovering)))
