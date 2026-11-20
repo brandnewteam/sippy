@@ -141,6 +141,7 @@ public final class SIPEngine {
     /// strand the account offline forever.
     private var routeRetryTimer: Timer?
     private var activeCall: Call?
+    private let incomingMedia = IncomingCallMedia()
     private var ringStartedAt: Date?
     private var declinedLocally = false
 
@@ -845,8 +846,11 @@ public final class SIPEngine {
 
     private func callChanged(_ lpCall: Call, state: Call.State, message: String) {
         // Single-call policy for M1: a second incoming call is politely refused.
-        if activeCall != nil, lpCall !== activeCall, state == .IncomingReceived {
-            try? lpCall.decline(reason: .Busy)
+        if let activeCall, lpCall !== activeCall {
+            if state == .IncomingReceived || state == .PushIncomingReceived {
+                try? lpCall.decline(reason: .Busy)
+            }
+            // Its later End and Released callbacks also belong to the second call.
             return
         }
 
@@ -857,11 +861,13 @@ public final class SIPEngine {
             declinedLocally = false
             statsHistory = []
             call = makeInfo(for: lpCall, phase: .ringingIncoming)
+            incomingMedia.beginRinging()
         case .OutgoingInit, .OutgoingProgress, .OutgoingRinging, .OutgoingEarlyMedia:
             activeCall = lpCall
             if call == nil { ringStartedAt = Date(); declinedLocally = false; statsHistory = [] }
             call = makeInfo(for: lpCall, phase: .ringingOutgoing)
         case .Connected:
+            incomingMedia.endRinging(answered: true)
             call = makeInfo(for: lpCall, phase: .active, startedAt: call?.startedAt ?? Date())
         case .StreamsRunning, .Updating, .UpdatedByRemote, .EarlyUpdating, .EarlyUpdatedByRemote:
             call = makeInfo(for: lpCall, phase: .active, startedAt: call?.startedAt ?? Date())
@@ -872,11 +878,14 @@ public final class SIPEngine {
         case .PausedByRemote:
             call?.phase = .heldByRemote
         case .End:
+            incomingMedia.endRinging()
             call?.phase = .ending
         case .Error:
+            incomingMedia.endRinging()
             lastCallError = Self.describeCallError(stackMessage: message, info: lpCall.errorInfo)
             call?.phase = .ending
         case .Released:
+            incomingMedia.endRinging()
             if let info = call {
                 onCallFinished?(FinishedCall(
                     direction: info.direction,
