@@ -151,18 +151,25 @@ app: build $(ICON)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Frameworks $(APP)/Contents/Resources
 	cp $(BUILD_DIR)/Sippy $(APP)/Contents/MacOS/
 	@# Sparkle is a binary SPM artifact; SwiftPM leaves it under .build/artifacts.
+	@# An incremental build can still contain frameworks from the old SDK manifest.
 	set -e; \
 	sparkle_fw=$$(find .build/artifacts -type d -name Sparkle.framework -path '*macos*' 2>/dev/null | head -1); \
 	for framework in "$(BUILD_DIR)"/*.framework "$$sparkle_fw"; do \
 	    [ -n "$$framework" ] || continue; \
+	    case "$${framework##*/}" in msopenh264.framework|bctoolbox-tester.framework) continue ;; esac; \
 	    ditto $(foreach arch,$(app_archs),--arch $(arch)) "$$framework" "$(APP)/Contents/Frameworks/$${framework##*/}"; \
 	done
 	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
-	@# The linphone frameworks ship a Modules -> Versions/Current/Modules
-	@# link with no Modules directory behind it (only compiling against a
-	@# framework needs one). Links to nothing are dead weight, and
-	@# `xattr -r` and friends trip over them, so drop any in the bundle.
+	@# Headers and module maps are only needed in the build products.
+	find "$(APP)/Contents/Frameworks" -type d \( -name Headers -o -name PrivateHeaders -o -name Modules \) \
+	    -prune -exec rm -rf {} +
+	@# Remove the resulting dangling links and those already shipped by the SDK.
 	find $(APP)/Contents/Frameworks -type l ! -exec test -e {} \; -print -delete
+	@# Drop optional SDK sounds. Linphone uses its default ringtone, ringback
+	@# and hold music for voice calls, including the Opus tracks in MKV files.
+	cd "$(APP)/Contents/Frameworks/linphone.framework/Resources" && rm -f \
+	    four_hands_together.mkv house_keeping.mkv its_a_game.mkv leaving_dreams.mkv \
+	    silence.mkv soft_as_snow.mkv hello8000.wav hello16000.wav incoming_chat.wav toy-mono.wav
 	cp Support/Info.plist $(APP)/Contents/
 	cp $(ICON) $(APP)/Contents/Resources/
 	cp -R Support/Ringtones $(APP)/Contents/Resources/Ringtones

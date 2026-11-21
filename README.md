@@ -107,7 +107,7 @@ A build without `SUFeedURL` (or with it empty) runs without the updater.
 
 ## Vendored pieces (and why)
 
-- `Vendor/linphone-sdk-swift-macos/` — the official linphone Swift package 5.5.16, mirrored from download.linphone.org (their GitLab was down at setup time). The binary xcframeworks still download from linphone's server on first build.
+- `Vendor/linphone-sdk-swift-macos/` — the official linphone Swift package 5.5.16, mirrored from download.linphone.org (their GitLab was down at setup time). Sippy’s manifest omits the OpenH264 stub and the SDK’s test framework. The binary xcframeworks still download from linphone's server on first build.
 - `Vendor/msbcg729/` — mediastreamer2's `g729.c` filter (AGPL, from the mediastreamer2 repo) plus our tiny plugin-init shim. The prebuilt SDK ships **without** G.729; `make deps` compiles these together with [bcg729](https://github.com/BelledonneCommunications/bcg729) into `Vendor/lib/libmsbcg729.so`, which liblinphone loads as a mediastreamer2 plugin. The `.so` extension is required — mediastreamer2 only scans for `libms*.so`.
 - `Vendor/lib/libhidapi.0.dylib` — built by `make deps` from [libusb/hidapi](https://github.com/libusb/hidapi); linphone.framework references it but the linphone macOS SDK forgets to ship it.
 

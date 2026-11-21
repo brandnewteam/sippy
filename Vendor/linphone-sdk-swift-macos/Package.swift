@@ -21,12 +21,6 @@ let package = Package(
 			),
 			
 			.binaryTarget(
-				name: "bctoolbox-tester",
-				url: "https://download.linphone.org/releases/macosx/sdk/spm//linphone-sdk-swift-macos-5.5.16/XCFrameworks/bctoolbox-tester.xcframework.zip",
-				checksum: "30c3346d8365e91929d283de461191fc8f87bbabb654ead70d22ae77825ab765"
-			),
-			
-			.binaryTarget(
 				name: "bctoolbox",
 				url: "https://download.linphone.org/releases/macosx/sdk/spm//linphone-sdk-swift-macos-5.5.16/XCFrameworks/bctoolbox.xcframework.zip",
 				checksum: "42b636c821afcf6a51bd07330b6142872475cf7eae4b503f32ca92f43a51ecb3"
@@ -81,12 +75,6 @@ let package = Package(
 			),
 			
 			.binaryTarget(
-				name: "msopenh264",
-				url: "https://download.linphone.org/releases/macosx/sdk/spm//linphone-sdk-swift-macos-5.5.16/XCFrameworks/msopenh264.xcframework.zip",
-				checksum: "9db7ca4f0b4bedfd025e4f75d0500f556503f047449d26873d45656065d62a79"
-			),
-			
-			.binaryTarget(
 				name: "ortp",
 				url: "https://download.linphone.org/releases/macosx/sdk/spm//linphone-sdk-swift-macos-5.5.16/XCFrameworks/ortp.xcframework.zip",
 				checksum: "fbc6acb77b0f3d88d1237780c0132a916dea5b1feeab0602201965b46d6fe411"
@@ -94,7 +82,7 @@ let package = Package(
 			
 		.target(
 			name: "linphonexcframeworks",
-			dependencies: ["ZXing", "bctoolbox-tester", "bctoolbox", "belcard", "belle-sip", "belr", "lime", "linphone", "mediastreamer2", "msamr", "mscodec2", "msopenh264", "ortp"]
+			dependencies: ["ZXing", "bctoolbox", "belcard", "belle-sip", "belr", "lime", "linphone", "mediastreamer2", "msamr", "mscodec2", "ortp"]
 		),
 
 		.target(
