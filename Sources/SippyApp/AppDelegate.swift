@@ -31,8 +31,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         statusItem = StatusItemController(
             engine: engine, store: store,
             checkForUpdates: updates.map { updates in { updates.checkForUpdates() } })
-        engine.start()
         engine.setRingtonePath(ringtones.ringtone(named: engine.account.ringtone)?.url.path)
+        engine.start()
         systemContacts.loadIfAuthorized()
         NSApp.servicesProvider = self
         NSUpdateDynamicServices()

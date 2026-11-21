@@ -14,7 +14,8 @@ public struct AccountConfig: Codable, Equatable, Sendable {
     /// Ordered codec priority list; empty means "use the defaults" (it is
     /// reconciled against the SIP stack's codec list at startup).
     public var codecPreferences: [CodecPreference]
-    /// Ringtone filename (bundled or imported); nil = Sippy's default.
+    /// Ringtone selection key. Older selections and imports use the filename.
+    /// A nil value follows Sippy's default.
     public var ringtone: String?
     /// Rewrite Contact/Via with the public address learned from responses
     /// (received/rport) — Telephone's "Update IP Address". On by default;

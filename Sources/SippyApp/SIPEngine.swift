@@ -200,7 +200,7 @@ public final class SIPEngine {
             codecPreferences = CodecDefaults.merge(
                 stored: account.codecPreferences, available: snapshotAvailableCodecs())
             applyCodecPreferencesToCore()
-            core.ring = ringtonePath
+            if let ringtonePath { core.ring = ringtonePath }
             if !account.requireRoute, let pathMonitor {
                 core.networkReachable = pathMonitor.currentPath.status == .satisfied
             }
@@ -472,15 +472,13 @@ public final class SIPEngine {
 
     // MARK: - Ringtone & ringer device
 
-    /// Points the stack's ring player at a sound file; nil restores the SDK
-    /// default ring.
+    /// Stores the resolved sound path across SIP core restarts.
     public func setRingtonePath(_ path: String?) {
         ringtonePath = path
         core?.ring = path
     }
 
-    /// User picked a ringtone: apply it and persist the choice (by filename,
-    /// so the library can move) with the account.
+    /// Applies and persists a ringtone selection independently of its install path.
     public func setRingtone(fileName: String?, path: String?) {
         setRingtonePath(path)
         account.ringtone = fileName

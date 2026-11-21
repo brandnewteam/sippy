@@ -1,14 +1,10 @@
 import AVFoundation
 import Foundation
 import Observation
+import linphone
 
-/// The ringtones Sippy can ring with: the bundled set (app Resources, with a
-/// repo fallback for `swift run`) plus user-imported files in
+/// Ringtones from the Linphone framework, the app bundle and user imports in
 /// `~/Library/Application Support/Sippy/Ringtones`.
-///
-/// The bundled set is third-party work under CC0 / CC BY (see
-/// `Support/Ringtones/CREDITS.md`, written by `Tools/fetch_ringtones.py`
-/// together with the `credits.json` read here).
 @MainActor
 @Observable
 final class RingtoneLibrary {
@@ -30,11 +26,17 @@ final class RingtoneLibrary {
         let url: URL
         let isBuiltIn: Bool
         var credit: Credit?
+        var linphoneTitle: String?
         var id: String { url.path }
-        /// Filename including extension — the stable key stored in the
-        /// account config (so the library can move without invalidating it).
         var fileName: String { url.lastPathComponent }
-        var displayName: String { url.deletingPathExtension().lastPathComponent }
+        // Keep existing filename preferences, including imports that happen
+        // to have the same filename as one of the new SDK choices.
+        var selectionKey: String { linphoneTitle == nil ? fileName : "linphone/" + fileName }
+        var displayName: String {
+            if let linphoneTitle { return linphoneTitle }
+            if isBuiltIn, fileName == "Time not Lost.wav" { return "Time Not Lost" }
+            return url.deletingPathExtension().lastPathComponent
+        }
     }
 
     private(set) var ringtones: [Ringtone] = []
@@ -42,6 +44,7 @@ final class RingtoneLibrary {
     static let importableExtensions = ["wav", "caf", "mp3", "m4a", "aif", "aiff"]
 
     private var previewPlayer: AVAudioPlayer?
+    private var linphonePreview: LinphoneRingPreview?
     private(set) var previewingID: String?
 
     static var userDirectory: URL {
@@ -66,6 +69,17 @@ final class RingtoneLibrary {
 
     func reload() {
         var found: [Ringtone] = []
+        // The first available SDK tone is the default. Read from the loaded
+        // framework so both a packaged app and a SwiftPM build use one copy.
+        if let resources = Bundle(identifier: "org.linphone.linphone") {
+            for (file, title) in [("notes_of_the_optimistic.mkv", "Notes of the Optimistic"),
+                                  ("oldphone-mono.wav", "Old Phone")] {
+                if let url = resources.url(forResource: file, withExtension: nil),
+                   FileManager.default.isReadableFile(atPath: url.path) {
+                    found.append(Ringtone(url: url, isBuiltIn: true, linphoneTitle: title))
+                }
+            }
+        }
         if let builtIn = Self.builtInDirectory {
             let credits = Self.credits(in: builtIn)
             found += list(directory: builtIn, builtIn: true).map { tone in
@@ -99,9 +113,9 @@ final class RingtoneLibrary {
             .map { Ringtone(url: $0, isBuiltIn: builtIn) }
     }
 
-    /// nil filename (or a vanished file) falls back to the first bundled tone.
-    func ringtone(named fileName: String?) -> Ringtone? {
-        if let fileName, let match = ringtones.first(where: { $0.fileName == fileName }) {
+    /// A new account or a retired ringtone resolves to Notes, then Old Phone.
+    func ringtone(named key: String?) -> Ringtone? {
+        if let key, let match = ringtones.first(where: { $0.selectionKey == key }) {
             return match
         }
         return ringtones.first(where: \.isBuiltIn) ?? ringtones.first
@@ -140,6 +154,11 @@ final class RingtoneLibrary {
             return
         }
         stopPreview()
+        if ringtone.url.pathExtension == "mkv" {
+            linphonePreview = LinphoneRingPreview(url: ringtone.url) { [weak self] in self?.stopPreview() }
+            if linphonePreview != nil { previewingID = ringtone.id }
+            return
+        }
         guard let player = try? AVAudioPlayer(contentsOf: ringtone.url) else { return }
         // A short ring pattern plays twice so the loop can be judged; a
         // tune of its own length plays once.
@@ -160,8 +179,37 @@ final class RingtoneLibrary {
     }
 
     func stopPreview() {
+        linphonePreview = nil
         previewPlayer?.stop()
         previewPlayer = nil
         previewingID = nil
+    }
+}
+
+/// Plays the SDK's Matroska ringtone without starting a SIP core. The
+/// media factory and audio output live only for the duration of the preview.
+private final class LinphoneRingPreview {
+    private let factory = ms_factory_new_with_voip()
+    private let player = linphone_ringtoneplayer_new()
+    private let finished: DispatchWorkItem
+
+    init?(url: URL, onFinish: @escaping () -> Void) {
+        finished = DispatchWorkItem(block: onFinish)
+        guard let card = ms_snd_card_manager_get_default_playback_card(ms_factory_get_snd_card_manager(factory))
+        else { return nil }
+        let cards = bctbx_list_append(nil, card)
+        defer { bctbx_list_free(cards) }
+        let result = linphone_ringtoneplayer_start_with_cb(factory, player, cards, url.path, -1, { _, context, _ in
+            guard let context else { return }
+            let finished = Unmanaged<DispatchWorkItem>.fromOpaque(context).takeUnretainedValue()
+            DispatchQueue.main.async(execute: finished)
+        }, Unmanaged.passUnretained(finished).toOpaque())
+        guard result == 0 else { return nil }
+    }
+
+    deinit {
+        finished.cancel()
+        linphone_ringtoneplayer_destroy(player)
+        ms_factory_destroy(factory)
     }
 }

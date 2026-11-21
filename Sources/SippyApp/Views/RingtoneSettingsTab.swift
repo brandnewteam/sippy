@@ -37,12 +37,12 @@ struct RingtoneSettingsTab: View {
         .onAppear { engine.refreshAudioDevices() }
     }
 
-    private var selectedFileName: String? {
-        ringtones.ringtone(named: engine.account.ringtone)?.fileName
+    private var selectedID: String? {
+        ringtones.ringtone(named: engine.account.ringtone)?.id
     }
 
     private func row(for tone: RingtoneLibrary.Ringtone) -> some View {
-        let isSelected = tone.fileName == selectedFileName
+        let isSelected = tone.id == selectedID
         return HStack(spacing: 8) {
             Image(systemName: "checkmark")
                 .font(.body.weight(.semibold))
@@ -84,14 +84,14 @@ struct RingtoneSettingsTab: View {
     }
 
     private func select(_ tone: RingtoneLibrary.Ringtone) {
-        engine.setRingtone(fileName: tone.fileName, path: tone.url.path)
+        engine.setRingtone(fileName: tone.selectionKey, path: tone.url.path)
     }
 
     private func delete(_ tone: RingtoneLibrary.Ringtone) {
-        let wasSelected = tone.fileName == selectedFileName
+        let wasSelected = tone.id == selectedID
         ringtones.delete(tone)
-        if wasSelected, let fallback = ringtones.ringtone(named: nil) {
-            engine.setRingtone(fileName: fallback.fileName, path: fallback.url.path)
+        if wasSelected {
+            engine.setRingtone(fileName: nil, path: ringtones.ringtone(named: nil)?.url.path)
         }
     }
 

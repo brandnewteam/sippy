@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Fetches Sippy's bundled ringtones into Support/Ringtones/.
+"""Fetches Sippy's two Ubuntu Touch ringtones into Support/Ringtones/.
 
 The ringtones come from lomiri-sounds, the sound set of Ubuntu Touch
 (https://gitlab.com/ubports/development/core/lomiri-sounds). Only tracks
-under CC0 or CC BY are used; the licenses are taken from that repository's
+under CC BY are used. The licenses are taken from that repository's
 debian/copyright, the one place upstream records them.
 
 Each track is downloaded at a pinned commit, checked against its SHA-256,
@@ -52,18 +52,10 @@ LICENSES = {
 # name and the name shown in Settings (non-ASCII names in the bundle get
 # mangled by unzip tools and break the code signature; see the Makefile).
 RINGTONES = [
-    ("Call me.ogg", "Anonymous", 2018, "CC0-1.0",
-     "70d821709cdc1df89558084794823eb4ca422eb5e5437cdaff11c742bacfdf10"),
     ("Entropy.ogg", "Mauricio Duarte", 2018, "CC-BY-4.0",
      "e74d2d3b802e8127d97fbffe2c087e781ffa7a8f10e977050a573460a00165d6"),
-    ("Mangoré.ogg", "Mauricio Duarte", 2018, "CC-BY-4.0",
-     "1dbb8d679f2ed6a4adf1ba325c9c03f6487f33ddd01bbd9ff98dbc5fc2b94696"),
     ("Time not Lost.ogg", "Mauricio Duarte", 2018, "CC-BY-4.0",
      "6efb986a09ddfcc9e14c43b67820beac7e1742e62ff3bb756ec87fdd5ed31209"),
-    ("Wooden Drive.ogg", "Amber Forest", 2018, "CC-BY-3.0",
-     "68959b5e4d03b4e124fdd84657898d0a637b13b8dc8f0b0e2650e0cd93c74b74"),
-    ("sakenointi.ogg", "TMetso", 2018, "CC-BY-4.0",
-     "c074e42ca7abf5b70e0f569765cfc97221fe971f5464fc64f084247c820ef4cb"),
 ]
 
 OUT_DIR = os.path.normpath(
@@ -118,13 +110,16 @@ def credits_markdown(entries):
     lines = [
         "# Ringtone credits",
         "",
-        "Sippy's bundled ringtones come from",
+        "Notes of the Optimistic (Simon M, 2015) and Old Phone are bundled with the",
+        "[Linphone SDK](https://github.com/BelledonneCommunications/linphone-sdk/tree/5.5.16/liblinphone/share/rings).",
+        "",
+        "Entropy and Time Not Lost come from",
         f"[lomiri-sounds]({SOURCE_REPO}), the sound set of Ubuntu Touch, at commit",
         f"`{SOURCE_COMMIT[:12]}`. The licenses below are the ones recorded in that",
         "repository's `debian/copyright`.",
         "",
         "Each file was converted from Ogg Vorbis stereo to 16-bit 44.1 kHz mono WAV,",
-        "with its level changed by the gain listed; nothing else was altered.",
+        "with its level changed by the gain listed.",
         "`Tools/fetch_ringtones.py` reproduces them.",
         "",
         "| Ringtone | Author | License | Gain |",
