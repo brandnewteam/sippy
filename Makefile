@@ -44,6 +44,8 @@ bin_path = $(patsubst $(CURDIR)/%,%,$(or $(shell swift build -c $(1) $(SWIFTPM_F
     --show-bin-path 2>/dev/null),$(error `swift build -c $(1) --show-bin-path` failed)))
 # Evaluated once, on first use (most targets never need them).
 BUILD_DIR = $(eval BUILD_DIR := $(call bin_path,$(CONFIG)))$(BUILD_DIR)
+# Expand after the build so the bundled frameworks match the executable's slices.
+app_archs = $(or $(shell lipo -archs "$(BUILD_DIR)/Sippy"),$(error Could not read Sippy's architectures))
 # deps artifacts are config-independent; always built against the debug
 # frameworks (which `swift build` fetches first).
 DEPS_BUILD_DIR = $(eval DEPS_BUILD_DIR := $(call bin_path,debug))$(DEPS_BUILD_DIR)
@@ -148,10 +150,13 @@ app: build $(ICON)
 	rm -rf $(APP)
 	mkdir -p $(APP)/Contents/MacOS $(APP)/Contents/Frameworks $(APP)/Contents/Resources
 	cp $(BUILD_DIR)/Sippy $(APP)/Contents/MacOS/
-	cp -R $(BUILD_DIR)/*.framework $(APP)/Contents/Frameworks/
 	@# Sparkle is a binary SPM artifact; SwiftPM leaves it under .build/artifacts.
+	set -e; \
 	sparkle_fw=$$(find .build/artifacts -type d -name Sparkle.framework -path '*macos*' 2>/dev/null | head -1); \
-	    if [ -n "$$sparkle_fw" ]; then cp -R "$$sparkle_fw" $(APP)/Contents/Frameworks/; fi
+	for framework in "$(BUILD_DIR)"/*.framework "$$sparkle_fw"; do \
+	    [ -n "$$framework" ] || continue; \
+	    ditto $(foreach arch,$(app_archs),--arch $(arch)) "$$framework" "$(APP)/Contents/Frameworks/$${framework##*/}"; \
+	done
 	cp Vendor/lib/libhidapi.0.dylib Vendor/lib/libmsbcg729.so $(APP)/Contents/Frameworks/
 	@# The linphone frameworks ship a Modules -> Versions/Current/Modules
 	@# link with no Modules directory behind it (only compiling against a
